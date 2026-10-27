@@ -1,0 +1,16 @@
+# Lokale zip-backups (scripts/backup.ps1) — ligger i OneDrive, men ikke i git
+backups/
+
+# Office-låsefiler og midlertidige filer
+~$*
+*.tmp
+
+# Editor/OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Lokale Claude-indstillinger
+.claude/settings.local.json

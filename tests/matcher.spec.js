@@ -1,0 +1,115 @@
+// Tests af matcher.js mod de rigtige testspørgsmål.
+(function () {
+  'use strict';
+  var T = window.JFM_TEST;
+  var M = window.JFM.matcher;
+  var qs = window.JFM_QUESTIONS.questions;
+  var aus = qs.filter(function (q) { return q.id === 'aus-nz-cities'; })[0];
+  var cl = qs.filter(function (q) { return q.id === 'cl-advancement'; })[0];
+
+  function match(q, text, given) { return M.matchAnswer(text, q, given || []); }
+
+  T.test('normalize: små bogstaver, trim, accenter, æøå, tegnsætning', function () {
+    T.eq(M.normalize('  Beşiktaş  '), 'besiktas');
+    T.eq(M.normalize('Fenerbahçe'), 'fenerbahce');
+    T.eq(M.normalize('Atlético Madrid'), 'atletico madrid');
+    T.eq(M.normalize('Bodø/Glimt'), 'bodoe glimt');
+    T.eq(M.normalize('FC København'), 'fc koebenhavn');
+    T.eq(M.normalize('Århus'), 'aarhus');
+    T.eq(M.normalize('Canberra-Queanbeyan'), 'canberra queanbeyan');
+    T.eq(M.normalize('Zenit St.  Petersborg'), 'zenit st petersborg');
+  });
+
+  T.test('levenshtein', function () {
+    T.eq(M.levenshtein('sydney', 'sydny'), 1);
+    T.eq(M.levenshtein('kitten', 'sitting'), 3);
+    T.eq(M.levenshtein('', 'abc'), 3);
+  });
+
+  T.test('eksakt match giver svarets score', function () {
+    T.eq(match(aus, 'Sydney'), { status: 'correct', answer: 'Sydney', score: 85 });
+    T.eq(match(aus, 'perth'), { status: 'correct', answer: 'Perth', score: 39 });
+    T.eq(match(cl, 'Barcelona'), { status: 'correct', answer: 'Barcelona', score: 60 });
+  });
+
+  T.test('aliasser matcher hovednavnet', function () {
+    T.eq(match(aus, 'Canberra').answer, 'Canberra-Queanbeyan');
+    T.eq(match(aus, 'gold coast').answer, 'Gold Coast-Tweed Heads');
+    T.eq(match(cl, 'PSG').answer, 'Paris Saint-Germain');
+    T.eq(match(cl, 'Man Utd').answer, 'Manchester United');
+    T.eq(match(cl, 'FC Copenhagen').answer, 'FCK');
+    T.eq(match(cl, 'Milan').answer, 'AC Milan');
+    T.eq(match(cl, 'Inter Milan').answer, 'Inter');
+  });
+
+  T.test('accenter og æøå kan udelades', function () {
+    T.eq(match(cl, 'Besiktas').answer, 'Beşiktaş');
+    T.eq(match(cl, 'Fenerbahce').answer, 'Fenerbahçe');
+    T.eq(match(cl, 'Bayern Munchen').answer, 'Bayern München');
+    T.eq(match(cl, 'Bodo Glimt').answer, 'Bodø/Glimt');
+    T.eq(match(cl, 'Kobenhavn').answer, 'FCK');
+    T.eq(match(cl, 'Malaga').answer, 'Málaga');
+  });
+
+  T.test('stavefejl inden for tærsklen accepteres', function () {
+    T.eq(match(aus, 'Sydny').answer, 'Sydney');            // 1 fejl, 6 tegn
+    T.eq(match(aus, 'Melborne').answer, 'Melbourne');      // 1 fejl
+    T.eq(match(aus, 'Cristchurch').answer, 'Christchurch');
+    T.eq(match(aus, 'Wolongong').answer, 'Wollongong');
+    T.eq(match(cl, 'Juventis').answer, 'Juventus');
+    T.eq(match(cl, 'Kaiserlautern').answer, 'Kaiserslautern');
+  });
+
+  T.test('stavefejl over tærsklen er forkerte', function () {
+    T.eq(match(aus, 'Prth').status, 'correct');  // 1 fejl på 5 tegn er ok
+    T.eq(match(aus, 'Pxrtx').status, 'wrong');   // 2 fejl på 5 tegn er for meget
+    T.eq(match(aus, 'Sxdnxx').status, 'wrong'); // 3 fejl på 6 tegn
+  });
+
+  T.test('forkert svar giver 100 point', function () {
+    T.eq(match(aus, 'London'), { status: 'wrong', answer: null, score: 100 });
+    T.eq(match(cl, 'Brøndby'), { status: 'wrong', answer: null, score: 100 });
+  });
+
+  T.test('tvetydige svar afvises (tæller ikke som forkert)', function () {
+    T.eq(match(cl, 'Madrid').status, 'ambiguous');
+    T.eq(match(cl, 'Manchester').status, 'ambiguous');
+    T.eq(match(cl, 'Real').status, 'ambiguous');
+    T.eq(match(cl, 'Moskva').status, 'ambiguous');
+    T.eq(match(cl, 'Borussia').status, 'ambiguous');
+  });
+
+  T.test('allerede givne svar er dubletter', function () {
+    T.eq(match(aus, 'Sydney', ['Sydney']).status, 'duplicate');
+    T.eq(match(aus, 'canbera', ['Canberra-Queanbeyan']).status, 'duplicate');
+    T.eq(match(cl, 'Man United', ['Manchester United']).status, 'duplicate');
+    T.eq(match(aus, 'Perth', ['Sydney']).status, 'correct');
+  });
+
+  T.test('matching sker pr. spørgsmål (Newcastle)', function () {
+    T.eq(match(aus, 'Newcastle').answer, 'Newcastle-Maitland');
+    T.eq(match(aus, 'Newcastle').score, 1);
+    T.eq(match(cl, 'Newcastle').answer, 'Newcastle');
+    T.eq(match(cl, 'Newcastle').score, 4);
+  });
+
+  T.test('pointless-svar giver 0', function () {
+    T.eq(match(aus, 'Dunedin').score, 0);
+    T.eq(match(cl, 'Rangers').score, 0);
+  });
+
+  T.test('tom input er forkert', function () {
+    T.eq(match(aus, '   ').status, 'wrong');
+  });
+
+  T.test('spørgsmålsdata: unikke id\'er, gyldige scores', function () {
+    var ids = qs.map(function (q) { return q.id; });
+    T.eq(ids.length, new Set(ids).size, 'unikke id');
+    qs.forEach(function (q) {
+      q.answers.forEach(function (a) {
+        T.assert(a.score >= 0 && a.score <= 100, q.id + ': ' + a.name + ' har ugyldig score');
+        T.assert(Array.isArray(a.aliases), q.id + ': ' + a.name + ' mangler aliases');
+      });
+    });
+  });
+})();
