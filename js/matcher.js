@@ -49,8 +49,9 @@
   }
 
   // Tilladt afstand afhænger af længden på det svar, der sammenlignes med.
+  // Op til 7 tegn kun 1 fejl — med 2 blev fx "Milano" godkendt som "Malabo" (v1.3.0).
   function maxDistance(length) {
-    if (length <= 5) return 1;
+    if (length <= 7) return 1;
     if (length <= 10) return 2;
     return 3;
   }

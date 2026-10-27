@@ -3,7 +3,7 @@
 En dansk fan-udgave af tv-quizzen *Jo Færre Jo Bedre* (Pointless) til vennegruppen.
 Hele spillet kører på én enhed. Den gives videre mellem holdene, og **færrest point vinder**.
 
-**Version:** 1.3.0, med 43 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
+**Version:** 1.3.0, med 44 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
 
 ## Sådan spiller I
 

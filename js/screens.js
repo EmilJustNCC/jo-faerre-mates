@@ -362,8 +362,12 @@
       (pointless.length > MAX_POINTLESS_SHOWN ? '<li class="muted">… og ' + (pointless.length - MAX_POINTLESS_SHOWN) + ' flere</li>' : '') :
       '<li class="muted">' + (hasPointless ? 'I fandt dem alle!' : 'Dette spørgsmål har ingen pointless-svar.') + '</li>';
 
-    var top = q.answers.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, TOP_ANSWERS_SHOWN)
-      .map(function (a) { return '<li>' + h(a.name) + ' <b>' + a.score + '</b></li>'; }).join('');
+    // Spørgsmål med kun nulsvar har ingen "mest givne svar".
+    var onlyZero = q.answers.every(function (a) { return a.score === 0; });
+    var top = onlyZero ?
+      '<li class="muted">Kun nulsvar tæller i dette spørgsmål.</li>' :
+      q.answers.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, TOP_ANSWERS_SHOWN)
+        .map(function (a) { return '<li>' + h(a.name) + ' <b>' + a.score + '</b></li>'; }).join('');
 
     var panel = questionHeader(q) +
       '<h2 class="small-heading">Rundens svar</h2>' +

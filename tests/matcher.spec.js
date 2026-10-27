@@ -194,6 +194,26 @@
     T.eq(match(byId('casper-christensen'), 'Klovn 2').status, 'wrong');
   });
 
+  T.test('stavefejl-tolerance: højst 1 fejl op til 7 tegn (Milano ≠ Malabo)', function () {
+    var m = byId('hovedstaeder-med-m');
+    T.eq(match(m, 'Milano').status, 'wrong', 'Milano er ikke en hovedstad');
+    T.eq(match(m, 'Malta').status, 'wrong');
+    T.eq(match(m, 'Madril').answer, 'Madrid', '1 fejl er stadig ok');
+    T.eq(match(byId('byer-tre-michelin-stjerner'), 'Milano').score, 18, 'Milano giver 18 i Michelin-spørgsmålet');
+    T.eq(match(aus, 'Melborne').answer, 'Melbourne', '2 fejl ok fra 8 tegn');
+  });
+
+  T.test('Grammy-spørgsmålet: kun nulsvar tæller, alt andet er forkert', function () {
+    var g = byId('kvinder-fem-grammyer');
+    T.eq(g.answers.length, 55);
+    T.assert(g.answers.every(function (a) { return a.score === 0; }), 'alle svar giver 0');
+    T.assert(g.instruction.indexOf('Kun nulsvar tæller') !== -1, 'instruktionen siger det');
+    T.eq(match(g, 'Donna Summer'), { status: 'correct', answer: 'Donna Summer', score: 0 });
+    T.eq(match(g, 'H.E.R.').answer, 'H.E.R');
+    T.eq(match(g, 'Beyoncé'), { status: 'wrong', answer: null, score: 100 });
+    T.eq(match(g, 'Naomi').status, 'ambiguous');
+  });
+
   T.test('nye spørgsmål: forkerte svar forbliver forkerte', function () {
     T.eq(match(byId('kattedyr'), 'Huskat').status, 'wrong');
     T.eq(match(byId('praesidenter-flere-perioder'), 'Joe Biden').status, 'wrong');
