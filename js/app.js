@@ -2,7 +2,7 @@
 (function (JFM) {
   'use strict';
 
-  JFM.APP_VERSION = '1.3.0';
+  JFM.APP_VERSION = '2.0.0';
 
   var E = JFM.engine;
   var root;
@@ -68,7 +68,7 @@
 
   function revealKey(state) {
     var r = state.round;
-    return [r.type, r.number, r.stage, r.attempt || 0, r.questionId, r.given.length, r.revealIdx].join(':');
+    return [r.number, r.questionId, r.turnIdx, r.given.length, r.revealIdx].join(':');
   }
 
   function startReveal(el, state) {

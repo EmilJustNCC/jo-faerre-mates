@@ -203,6 +203,17 @@
     T.eq(match(aus, 'Melborne').answer, 'Melbourne', '2 fejl ok fra 8 tegn');
   });
 
+  T.test('stavefejl-tolerance: højst 1 fejl op til 10 tegn (Martini ≠ Martinez)', function () {
+    var drinks = byId('drinks');
+    T.eq(match(drinks, 'Martini').answer, 'Dry Martini');
+    T.eq(match(drinks, 'Martinez').answer, 'Martinez');
+    T.eq(match(drinks, 'Martinas').status, 'wrong', '2 fejl fra både "Martinez" og "Martini" er for meget');
+    T.eq(match(drinks, 'Mojitto').answer, 'Mojito', '1 fejl er stadig ok');
+    T.eq(match(byId('befolkningstaethed-over-100'), 'Thailand').answer, 'Thailand');
+    T.eq(match(byId('befolkningstaethed-over-100'), 'Holland').answer, 'Holland');
+    T.eq(match(aus, 'Cristchurch').answer, 'Christchurch', '12 tegn: op til 2 fejl');
+  });
+
   T.test('Grammy-spørgsmålet: kun nulsvar tæller, alt andet er forkert', function () {
     var g = byId('kvinder-fem-grammyer');
     T.eq(g.answers.length, 55);

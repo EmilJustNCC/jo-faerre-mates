@@ -1,21 +1,25 @@
 // Spillogik som ren state machine: reduce(state, action, bank) → newState.
 // Ingen DOM og ingen storage. Tilfældighed kommer ind via action.seed, så reduce er deterministisk.
+//
+// Spilforløb (v3): spørgsmål efter spørgsmål. Pr. spørgsmål giver hvert hold ANSWERS_PER_TEAM svar,
+// ét ad gangen og på skift (A, B, A, B …). Point lægges til holdets samlede score.
+// Når et spørgsmål er færdigt og mindst ét hold har nået TARGET_SCORE, slutter spillet:
+// holdet med flest point taber, holdet med færrest vinder.
 (function (JFM) {
   'use strict';
 
-  // v2: 3 svar pr. hold i eliminationsrunder (erstatter 1. og 2. pas).
-  var STATE_VERSION = 2;
+  var STATE_VERSION = 3;
   var MIN_TEAMS = 2;
   var MAX_TEAMS = 6;
   var MAX_NAME_LENGTH = 24;
-  var H2H_WINS_NEEDED = 2;
   var WRONG_SCORE = 100;
-  var ANSWERS_PER_TURN = 3;   // eliminationsrunder; omspil og Head-to-Head har 1 svar
+  var TARGET_SCORE = 1000;    // første hold hertil taber
+  var ANSWERS_PER_TEAM = 2;   // svar pr. hold pr. spørgsmål, givet på skift
+  var ANSWERS_PER_TURN = 1;   // felter pr. tur (motoren understøtter flere)
   var PASS_WORD = 'pas';      // giver samme point som et forkert svar
 
   var PHASES = [
-    'SETUP', 'INTRO', 'ROUND_INTRO', 'HANDOFF', 'ANSWERING', 'REVEAL',
-    'ROUND_SUMMARY', 'TIEBREAK', 'ELIMINATION', 'H2H_INTRO', 'H2H_RESULT', 'WINNER'
+    'SETUP', 'INTRO', 'ROUND_INTRO', 'HANDOFF', 'ANSWERING', 'REVEAL', 'ROUND_SUMMARY', 'GAME_OVER'
   ];
 
   var MESSAGES = {
@@ -56,10 +60,6 @@
     return null;
   }
 
-  function activeTeams(state) {
-    return state.teams.filter(function (t) { return !t.eliminated; });
-  }
-
   function findQuestion(bank, questionId) {
     var list = (bank && bank.questions) || [];
     for (var i = 0; i < list.length; i++) {
@@ -93,9 +93,8 @@
       id: String(team.id),
       name: String(team.name || '').trim(),
       players: players,
-      roundScore: 0,
-      eliminated: false,
-      h2hWins: 0
+      totalScore: 0,      // samlet for hele spillet
+      questionScore: 0    // for det aktuelle spørgsmål
     };
   }
 
@@ -130,14 +129,14 @@
       usedQuestionIds: [],
       round: null,
       history: [],
-      winnerId: null
+      result: null
     };
   }
 
   // Gemte spil fra ældre versioner: reglerne er ændret, så et igangværende spil kan ikke fortsættes,
   // men holdene bevares. Ukendte versioner returneres uændret (og afvises af isValidState).
   function migrateState(state) {
-    if (state && state.version === 1 && Array.isArray(state.teams)) {
+    if (state && (state.version === 1 || state.version === 2) && Array.isArray(state.teams)) {
       return createInitialState(state.teams);
     }
     return state;
@@ -154,236 +153,76 @@
       (state.phase === 'SETUP' || state.phase === 'INTRO' || !!state.round);
   }
 
-  // ---------- Runder ----------
-
-  function lastEliminationRecord(state) {
-    for (var i = state.history.length - 1; i >= 0; i--) {
-      if (state.history[i].type === 'elimination') return state.history[i];
-    }
-    return null;
+  // Hold sorteret efter samlet score (færrest først). Lige point: oprettelsesrækkefølge.
+  function standings(state) {
+    return state.teams.slice().sort(function (a, b) {
+      return a.totalScore - b.totalScore || state.teams.indexOf(a) - state.teams.indexOf(b);
+    });
   }
 
-  function startEliminationRound(state, ctx) {
-    var previous = lastEliminationRecord(state);
-    var number = state.history.filter(function (h) { return h.type === 'elimination'; }).length + 1;
-    var ids = activeTeams(state).map(function (t) { return t.id; });
+  // ---------- Spørgsmål ----------
 
-    var order;
-    if (!previous) {
-      order = shuffle(ids, ctx.rng);
-    } else {
-      // Stigende efter point i forrige runde. Ved lige point beholdes forrige rækkefølge.
-      var prevOrder = previous.order || [];
-      order = ids.slice().sort(function (a, b) {
-        var diff = (previous.scores[a] || 0) - (previous.scores[b] || 0);
-        return diff !== 0 ? diff : prevOrder.indexOf(a) - prevOrder.indexOf(b);
+  function startQuestion(state, ctx) {
+    var previous = state.round;
+    var ids = state.teams.map(function (t) { return t.id; });
+    // Første spørgsmål: lodtrækning. Derefter roterer det hold, der starter.
+    var order = previous ? previous.order.slice(1).concat(previous.order[0]) : shuffle(ids, ctx.rng);
+
+    state.teams.forEach(function (t) { t.questionScore = 0; });
+    var questionId = pickQuestion(state, ctx.bank, ctx.rng);
+
+    // Holdene skiftes efter hvert svar: A, B, C, A, B, C …
+    var turns = [];
+    for (var n = 0; n < ANSWERS_PER_TEAM; n++) {
+      order.forEach(function (teamId) {
+        turns.push({ teamId: teamId, playerIdx: null, slots: ANSWERS_PER_TURN });
       });
     }
 
-    state.teams.forEach(function (t) { t.roundScore = 0; });
-
-    var questionId = pickQuestion(state, ctx.bank, ctx.rng);
     state.round = {
-      type: 'elimination',
-      number: number,
+      number: previous ? previous.number + 1 : 1,
       questionId: questionId,
-      originalQuestionId: questionId,
-      stage: 'main',
       order: order,
-      turns: [],
+      turns: turns,
       turnIdx: 0,
       given: [],
-      roundGiven: [],
       pending: null,
       revealIdx: 0,
       revealDone: false,
-      lastFeedback: null,
-      tiebreak: null,
-      eliminatedId: null
+      lastFeedback: null
     };
     state.phase = 'ROUND_INTRO';
     return state;
   }
 
-  // Én tur pr. hold med 3 svar. Holdet konfererer, så der er ingen bestemt spiller.
-  function beginMainTurns(state) {
+  function finishQuestion(state) {
     var round = state.round;
-    round.stage = 'main';
-    round.turns = round.order.map(function (teamId) {
-      return { teamId: teamId, playerIdx: null, slots: ANSWERS_PER_TURN };
-    });
-    round.turnIdx = 0;
-    state.phase = 'HANDOFF';
-    return state;
-  }
-
-  function beginTiebreak(state) {
-    var round = state.round;
-    round.stage = 'tiebreak';
-    round.turns = round.tiebreak.teamIds.map(function (teamId) {
-      return { teamId: teamId, playerIdx: null, slots: 1 };  // holdet konfererer
-    });
-    round.turnIdx = 0;
-    state.phase = 'HANDOFF';
-    return state;
-  }
-
-  function eliminate(state, teamId) {
-    var round = state.round;
-    var team = findTeam(state, teamId);
-    team.eliminated = true;
-    round.eliminatedId = teamId;
     var scores = {};
-    round.order.forEach(function (id) { scores[id] = findTeam(state, id).roundScore; });
-    state.history.push({
-      type: 'elimination',
-      number: round.number,
-      questionId: round.originalQuestionId,
-      order: round.order.slice(),
-      scores: scores,
-      tiebreaks: round.tiebreak ? round.tiebreak.attempt : 0,
-      eliminatedId: teamId
-    });
-    state.phase = 'ELIMINATION';
-    return state;
-  }
+    state.teams.forEach(function (t) { scores[t.id] = t.questionScore; });
+    state.history.push({ number: round.number, questionId: round.questionId, scores: scores });
 
-  // Finder holdene med højeste værdi i en score-map.
-  function highest(teamIds, scoreOf) {
-    var max = -Infinity;
-    var top = [];
-    teamIds.forEach(function (id) {
-      var s = scoreOf(id);
-      if (s > max) { max = s; top = [id]; }
-      else if (s === max) top.push(id);
-    });
-    return top;
-  }
+    if (!state.teams.some(function (t) { return t.totalScore >= TARGET_SCORE; })) return null;
 
-  function resolveRound(state, ctx) {
-    var round = state.round;
-    var top = highest(round.order, function (id) { return findTeam(state, id).roundScore; });
-    if (top.length === 1) return eliminate(state, top[0]);
-    round.tiebreak = { teamIds: top, scores: {}, sameQuestion: true, attempt: 1 };
-    state.phase = 'TIEBREAK';
-    return state;
-  }
-
-  function resolveTiebreak(state, ctx) {
-    var round = state.round;
-    var tb = round.tiebreak;
-    var top = highest(tb.teamIds, function (id) { return tb.scores[id]; });
-    if (top.length === 1) return eliminate(state, top[0]);
-    // Stadig lige: nyt spørgsmål kun mellem de berørte hold, i samme rækkefølge som 1. pas.
-    var ordered = round.order.filter(function (id) { return top.indexOf(id) !== -1; });
-    round.questionId = pickQuestion(state, ctx.bank, ctx.rng);
-    round.given = [];
-    round.tiebreak = { teamIds: ordered, scores: {}, sameQuestion: false, attempt: tb.attempt + 1 };
-    state.phase = 'TIEBREAK';
-    return state;
-  }
-
-  // ---------- Head-to-Head ----------
-
-  function startH2H(state, ctx) {
-    var ids = activeTeams(state).map(function (t) { return t.id; });
-    var previous = lastEliminationRecord(state);
-    var order;
-    if (previous) {
-      // Holdet med færrest point i sidste runde svarer først.
-      order = ids.slice().sort(function (a, b) {
-        var diff = (previous.scores[a] || 0) - (previous.scores[b] || 0);
-        return diff !== 0 ? diff : previous.order.indexOf(a) - previous.order.indexOf(b);
-      });
-    } else {
-      order = shuffle(ids, ctx.rng);
-    }
-    state.teams.forEach(function (t) { t.h2hWins = 0; t.roundScore = 0; });
-    state.round = {
-      type: 'h2h',
-      number: 0,
-      questionId: null,
-      stage: 'h2h',
-      order: order,
-      turns: [],
-      turnIdx: 0,
-      given: [],
-      pending: null,
-      revealIdx: 0,
-      revealDone: false,
-      lastFeedback: null,
-      attempt: 1,
-      scores: {},
-      outcome: null
+    var max = Math.max.apply(null, state.teams.map(function (t) { return t.totalScore; }));
+    var min = Math.min.apply(null, state.teams.map(function (t) { return t.totalScore; }));
+    state.result = {
+      loserIds: state.teams.filter(function (t) { return t.totalScore === max; }).map(function (t) { return t.id; }),
+      winnerIds: state.teams.filter(function (t) { return t.totalScore === min; }).map(function (t) { return t.id; }),
+      questions: round.number
     };
-    state.phase = 'H2H_INTRO';
+    state.phase = 'GAME_OVER';
     return state;
   }
 
-  function startH2HQuestion(state, ctx) {
-    var round = state.round;
-    round.number += 1;
-    // Holdene skiftes til at svare først.
-    var first = round.order[(round.number - 1) % 2];
-    var second = round.order[round.number % 2];
-    round.questionId = pickQuestion(state, ctx.bank, ctx.rng);
-    round.given = [];
-    round.attempt = 1;
-    round.scores = {};
-    round.outcome = null;
-    round.turns = [{ teamId: first, playerIdx: null, slots: 1 }, { teamId: second, playerIdx: null, slots: 1 }];
-    round.turnIdx = 0;
-    state.phase = 'HANDOFF';
-    return state;
-  }
-
-  function resolveH2HQuestion(state) {
-    var round = state.round;
-    var a = round.turns[0].teamId;
-    var b = round.turns[1].teamId;
-    var sa = round.scores[a];
-    var sb = round.scores[b];
-    if (sa === sb) {
-      round.outcome = { tie: true, winnerId: null };
-    } else {
-      var winnerId = sa < sb ? a : b;
-      findTeam(state, winnerId).h2hWins += 1;
-      round.outcome = { tie: false, winnerId: winnerId };
-    }
-    state.phase = 'H2H_RESULT';
-    return state;
-  }
-
-  function finishGame(state) {
-    var winner = state.teams.filter(function (t) { return !t.eliminated && t.h2hWins >= H2H_WINS_NEEDED; })[0];
-    state.winnerId = winner.id;
-    var wins = {};
-    activeTeams(state).forEach(function (t) { wins[t.id] = t.h2hWins; });
-    state.history.push({ type: 'h2h', questions: state.round.number, wins: wins, winnerId: winner.id });
-    state.phase = 'WINNER';
-    return state;
-  }
-
-  // Efter et afsluttet svar: næste tur, næste pas eller afslutning af etapen.
-  function advanceTurn(state, ctx) {
+  // Efter et afsluttet svar: næste tur eller opsummering af spørgsmålet.
+  function advanceTurn(state) {
     var round = state.round;
     round.pending = null;
     round.revealIdx = 0;
     round.revealDone = false;
     round.turnIdx += 1;
-    if (round.turnIdx < round.turns.length) {
-      state.phase = 'HANDOFF';
-      return state;
-    }
-    switch (round.stage) {
-      case 'main':
-        round.roundGiven = round.given.slice();
-        state.phase = 'ROUND_SUMMARY';
-        return state;
-      case 'tiebreak': return resolveTiebreak(state, ctx);
-      case 'h2h': return resolveH2HQuestion(state);
-    }
-    return null;
+    state.phase = round.turnIdx < round.turns.length ? 'HANDOFF' : 'ROUND_SUMMARY';
+    return state;
   }
 
   // ---------- Action-handlere ----------
@@ -429,8 +268,7 @@
       return state;
     },
 
-    // action.texts: ét svar pr. felt i turen (3 i eliminationsrunder, 1 i omspil/H2H).
-    // action.text accepteres også ved ture med ét felt.
+    // action.texts: ét svar pr. felt i turen (action.text accepteres ved ture med ét felt).
     // Er ét felt tomt, tvetydigt eller en dublet, afvises hele turen, og felterne bevares i lastFeedback.inputs.
     SUBMIT_ANSWER: function (state, action, ctx) {
       if (state.phase !== 'ANSWERING') return null;
@@ -481,8 +319,7 @@
           input: text,
           matched: outcome.answer,
           score: outcome.score,
-          status: outcome.status,
-          stage: round.stage
+          status: outcome.status
         });
       }
 
@@ -495,18 +332,14 @@
       return state;
     },
 
-    // Afslører ét svar ad gangen (round.revealIdx) og lægger dets point til.
+    // Afslører ét svar ad gangen (round.revealIdx) og lægger dets point til holdets score.
     REVEAL_DONE: function (state) {
       if (state.phase !== 'REVEAL' || state.round.revealDone) return null;
       var round = state.round;
       var entry = round.pending.entries[round.revealIdx];
-      if (round.stage === 'main') {
-        findTeam(state, entry.teamId).roundScore += entry.score;
-      } else if (round.stage === 'tiebreak') {
-        round.tiebreak.scores[entry.teamId] = entry.score;
-      } else if (round.stage === 'h2h') {
-        round.scores[entry.teamId] = entry.score;
-      }
+      var team = findTeam(state, entry.teamId);
+      team.questionScore += entry.score;
+      team.totalScore += entry.score;
       round.revealDone = true;
       return state;
     },
@@ -514,39 +347,20 @@
     NEXT: function (state, action, ctx) {
       switch (state.phase) {
         case 'INTRO':
-          return activeTeams(state).length > 2 ? startEliminationRound(state, ctx) : startH2H(state, ctx);
+          return startQuestion(state, ctx);
         case 'ROUND_INTRO':
-          return beginMainTurns(state);
+          state.phase = 'HANDOFF';
+          return state;
         case 'REVEAL':
           if (!state.round.revealDone) return null;
           if (state.round.revealIdx + 1 < state.round.pending.entries.length) {
-            state.round.revealIdx += 1;   // næste af holdets svar
+            state.round.revealIdx += 1;   // næste svar i samme tur
             state.round.revealDone = false;
             return state;
           }
-          return advanceTurn(state, ctx);
+          return advanceTurn(state);
         case 'ROUND_SUMMARY':
-          return resolveRound(state, ctx);
-        case 'TIEBREAK':
-          return beginTiebreak(state);
-        case 'ELIMINATION':
-          return activeTeams(state).length > 2 ? startEliminationRound(state, ctx) : startH2H(state, ctx);
-        case 'H2H_INTRO':
-          return startH2HQuestion(state, ctx);
-        case 'H2H_RESULT':
-          if (activeTeams(state).some(function (t) { return t.h2hWins >= H2H_WINS_NEEDED; })) {
-            return finishGame(state);
-          }
-          if (state.round.outcome && state.round.outcome.tie) {
-            // Lige: begge hold svarer igen på samme spørgsmål.
-            state.round.attempt += 1;
-            state.round.scores = {};
-            state.round.outcome = null;
-            state.round.turnIdx = 0;
-            state.phase = 'HANDOFF';
-            return state;
-          }
-          return startH2HQuestion(state, ctx);
+          return finishQuestion(state) || startQuestion(state, ctx);
       }
       return null;
     },
@@ -580,7 +394,9 @@
     return {
       team: team,
       playerName: turn.playerIdx == null ? null : team.players[turn.playerIdx],
-      slots: turn.slots || 1
+      slots: turn.slots || 1,
+      // Hvilket af holdets svar til spørgsmålet det er (1-baseret)
+      answerNumber: Math.floor(round.turnIdx / round.order.length) + 1
     };
   }
 
@@ -604,7 +420,8 @@
     MIN_TEAMS: MIN_TEAMS,
     MAX_TEAMS: MAX_TEAMS,
     MAX_NAME_LENGTH: MAX_NAME_LENGTH,
-    H2H_WINS_NEEDED: H2H_WINS_NEEDED,
+    TARGET_SCORE: TARGET_SCORE,
+    ANSWERS_PER_TEAM: ANSWERS_PER_TEAM,
     ANSWERS_PER_TURN: ANSWERS_PER_TURN,
     PASS_WORD: PASS_WORD,
     PHASES: PHASES,
@@ -615,7 +432,7 @@
     validateTeam: validateTeam,
     findTeam: findTeam,
     findQuestion: findQuestion,
-    activeTeams: activeTeams,
+    standings: standings,
     currentTurn: currentTurn,
     currentReveal: currentReveal,
     canStart: canStart,

@@ -5,6 +5,19 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 
 ## [Ikke udgivet]
 
+## [2.0.0] - 2026-10-27
+
+### Ændret — nyt spilforløb
+- **Samlet pointtavle til 1.000:** Point lægges sammen fra spørgsmål til spørgsmål. Når et spørgsmål er færdigt, og et hold har mindst 1.000 point, slutter spillet. Holdet med flest point taber, og holdet med færrest vinder. Ved lige point deles pladsen.
+- **2 svar pr. hold pr. spørgsmål, på skift:** A, B, A, B (A, B, C, A, B, C med 3 hold), og enheden går videre efter hvert svar. Det erstatter turen med 3 felter. Startholdet roterer fra spørgsmål til spørgsmål.
+- Podierne nederst viser samlet point, "+X dette spørgsmål" og en bjælke mod 1.000. De opdateres efter hvert afsløret svar.
+- Opsummeringen viser point for spørgsmålet, samlet point og stillingen. Slutskærmen viser vinder, taber og slutstilling.
+- **Strammere stavefejl-tolerance:** Svar på op til 10 tegn må højst have 1 fejl, svar på 11–15 tegn højst 2 og længere svar højst 3. "Martini" blev tidligere godkendt som Martinez, og "Martini" er nu alias for Dry Martini.
+- Gemte spil har fået nyt format (version 3). Gemte spil fra v1.x kan ikke fortsættes, men holdene bevares.
+
+### Fjernet
+- Eliminationsrunder, omspil og Head-to-Head. Med 2 hold sluttede spillet før efter 2 spørgsmål.
+
 ## [1.3.0] - 2026-10-27
 
 ### Tilføjet
@@ -75,6 +88,7 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 - Backup-script (`scripts/backup.ps1`) med zip og git bundle samt en pre-commit-hook, der kører testene.
 
 [Ikke udgivet]: #
+[2.0.0]: #
 [1.3.0]: #
 [1.2.0]: #
 [1.1.0]: #

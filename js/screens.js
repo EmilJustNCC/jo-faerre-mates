@@ -28,13 +28,13 @@
   function stageLabel(state) {
     var r = state.round;
     if (!r) return '';
-    if (r.type === 'h2h') {
-      return 'Head-to-Head · Spørgsmål ' + r.number + (r.attempt > 1 ? ' · Nyt forsøg' : '');
-    }
-    var byPhaseLabel = { ROUND_SUMMARY: 'Resultat', TIEBREAK: 'Omspil', ELIMINATION: 'Eliminering' };
-    var stage = byPhaseLabel[state.phase] || (r.stage === 'tiebreak' ? 'Omspil' : '');
-    return 'Runde ' + r.number + (stage ? ' · ' + stage : '');
+    if (state.phase === 'GAME_OVER') return 'Slutstilling';
+    return 'Spørgsmål ' + r.number + (state.phase === 'ROUND_SUMMARY' ? ' · Resultat' : '');
   }
+
+  function fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+  function progressPct(team) { return Math.min(100, Math.round(team.totalScore / E.TARGET_SCORE * 100)); }
 
   function playersText(team) { return team.players.map(h).join(' & '); }
 
@@ -70,45 +70,48 @@
       '<p class="q-instruction">' + h(q.instruction) + '</p>';
   }
 
+  // Podier i bunden af spilskærmen: samlet score (opdateres efter hvert afsløret svar),
+  // point i dette spørgsmål og en bjælke mod 1000.
   function podiums(state) {
-    var r = state.round;
     var turn = E.currentTurn(state);
     var activeId = turn && ['HANDOFF', 'ANSWERING', 'REVEAL'].indexOf(state.phase) !== -1 ? turn.team.id : null;
-
-    if (r && r.type === 'h2h') {
-      var items = r.order.map(function (id) {
-        var t = E.findTeam(state, id);
-        var dots = '';
-        for (var i = 0; i < E.H2H_WINS_NEEDED; i++) dots += '<span class="dot' + (i < t.h2hWins ? ' on' : '') + '"></span>';
-        var score = r.scores[id];
-        return '<li class="podium' + (id === activeId ? ' active' : '') + '">' +
-          '<span class="podium-name">' + h(t.name) + '</span>' +
-          '<span class="podium-players">' + playersText(t) + '</span>' +
-          '<span class="podium-score">' + (score == null ? '–' : score) + '</span>' +
-          '<span class="podium-dots" aria-label="' + t.h2hWins + ' vundne">' + dots + '</span>' +
-        '</li>';
-      }).join('');
-      return '<ul class="podiums">' + items + '</ul>';
-    }
-
     var list = state.teams.map(function (t) {
-      var cls = 'podium' + (t.id === activeId ? ' active' : '') + (t.eliminated ? ' eliminated' : '');
-      if (r && r.eliminatedId === t.id && state.phase === 'ELIMINATION') cls += ' out';
-      var tb = r && r.tiebreak && r.tiebreak.scores[t.id] != null ? '<span class="podium-extra">Omspil: ' + r.tiebreak.scores[t.id] + '</span>' : '';
+      var pct = progressPct(t);
+      var cls = 'podium' + (t.id === activeId ? ' active' : '') + (pct >= 80 ? ' danger' : '');
       return '<li class="' + cls + '">' +
         '<span class="podium-name">' + h(t.name) + '</span>' +
         '<span class="podium-players">' + playersText(t) + '</span>' +
-        '<span class="podium-score">' + (t.eliminated && !(r && r.eliminatedId === t.id) ? 'UDE' : t.roundScore) + '</span>' +
-        tb +
+        '<span class="podium-score">' + fmt(t.totalScore) + '</span>' +
+        '<span class="podium-extra">' + (t.questionScore ? '+' + t.questionScore + ' dette spørgsmål' : '&nbsp;') + '</span>' +
+        '<span class="podium-bar" aria-hidden="true"><span style="width:' + pct + '%"></span></span>' +
       '</li>';
     }).join('');
-    return '<ul class="podiums">' + list + '</ul>';
+    return '<ul class="podiums" aria-label="Pointtavle — første hold til ' + fmt(E.TARGET_SCORE) + ' point taber">' + list + '</ul>';
+  }
+
+  // Stilling sorteret efter samlet score (færrest først) med bjælke mod 1000.
+  function scoreboard(state, opts) {
+    var o = opts || {};
+    var result = state.result;
+    return '<ol class="scoreboard">' + E.standings(state).map(function (t, i) {
+      var pct = progressPct(t);
+      var cls = 'sb-row' + (pct >= 80 ? ' danger' : '') +
+        (result && result.loserIds.indexOf(t.id) !== -1 ? ' loser' : '') +
+        (result && result.winnerIds.indexOf(t.id) !== -1 ? ' winner' : '');
+      return '<li class="' + cls + '">' +
+        '<span class="sb-rank">' + (i + 1) + '</span>' +
+        '<span class="sb-name">' + h(t.name) + '</span>' +
+        '<span class="sb-bar" aria-hidden="true"><span style="width:' + pct + '%"></span></span>' +
+        '<span class="sb-total">' + fmt(t.totalScore) + '</span>' +
+        (o.showQuestion ? '<span class="sb-delta">+' + t.questionScore + '</span>' : '') +
+      '</li>';
+    }).join('') + '</ol>';
   }
 
   function givenList(state) {
     // "Pas" vises ikke her — det er ikke et svar, andre kan bruge.
     var given = state.round.given.filter(function (g) { return g.status !== 'pass'; });
-    if (!given.length) return '<p class="muted small">Ingen svar endnu i denne runde.</p>';
+    if (!given.length) return '<p class="muted small">Ingen svar endnu til dette spørgsmål.</p>';
     return '<ul class="chips">' + given.map(function (g) {
       return '<li class="chip' + (isMiss(g) ? ' chip-wrong' : '') + '" title="' + h(teamName(state, g.teamId)) + '">' +
         h(entryLabel(g)) + ' <b>' + g.score + '</b></li>';
@@ -161,13 +164,9 @@
   }
 
   function progressPanel(state) {
-    var rows = state.teams.map(function (t) {
-      return '<li class="team-row' + (t.eliminated ? ' eliminated' : '') + '"><div><strong>' + h(t.name) + '</strong>' +
-        '<span class="muted"> · ' + playersText(t) + '</span></div><span>' + (t.eliminated ? 'Ude' : 'Med') + '</span></li>';
-    }).join('');
     return '<aside class="panel designer"><h2>Spil i gang</h2>' +
       '<p class="muted">' + h(stageLabel(state) || 'Spillet er startet') + '</p>' +
-      '<ul class="team-list">' + rows + '</ul></aside>';
+      scoreboard(state) + '</aside>';
   }
 
   function menu(state, ui) {
@@ -213,7 +212,7 @@
       '<p class="intro-kicker">Velkommen til</p>' +
       '<h1 class="arcade-title small-title"><span>JO FÆRRE</span><span>MATES</span><span>JO BEDRE</span></h1>' +
       '<ul class="intro-teams">' + teams + '</ul>' +
-      '<p class="muted">Færrest point vinder. Find de svar, som ingen andre tænkte på!</p>' +
+      '<p class="muted">Find de svar, som ingen andre tænkte på! Første hold til ' + fmt(E.TARGET_SCORE) + ' point taber.</p>' +
       nextButton('Lad spillet begynde!', ' style="animation-delay:' + (0.8 + state.teams.length * 0.25) + 's"') +
     '</div>';
   }
@@ -227,15 +226,17 @@
         '<span class="muted small">' + playersText(t) + '</span></div></li>';
     }).join('');
 
-    var orderNote = r.number === 1 ? 'Rækkefølgen er trukket lod.' : 'Rækkefølgen går efter færrest point i sidste runde.';
+    var orderNote = r.number === 1 ? 'Rækkefølgen er trukket lod.' : 'Et nyt hold starter hvert spørgsmål.';
     return '<div class="screen game">' + topBar(state) +
       '<section class="panel round-intro">' +
-        '<h1 class="round-title">RUNDE ' + r.number + '</h1>' +
-        '<p>Hvert hold giver <strong>' + E.ANSWERS_PER_TURN + ' svar</strong> og må gerne konferere. Pointene for de ' +
-          E.ANSWERS_PER_TURN + ' svar lægges sammen. Kan I ikke komme på flere, så skriv <strong>“pas”</strong> — det giver 100 point.</p>' +
-        '<p class="muted">' + orderNote + ' Spørgsmålet vises først, når enheden er givet videre.</p>' +
+        '<h1 class="round-title">SPØRGSMÅL ' + r.number + '</h1>' +
+        '<p>Hvert hold giver <strong>' + E.ANSWERS_PER_TEAM + ' svar</strong> — ét ad gangen, på skift. Enheden går videre efter hvert svar. ' +
+          'Kan I ikke komme på et svar, så skriv <strong>“pas”</strong> — det giver 100 point.</p>' +
+        '<p class="muted">' + orderNote + ' Pointene lægges sammen, og første hold til <strong>' + fmt(E.TARGET_SCORE) +
+          ' point</strong> taber. Spørgsmålet vises først, når enheden er givet videre.</p>' +
         '<ol class="order-list">' + rows + '</ol>' +
-        nextButton('Start runden') +
+        (r.number > 1 ? '<h2 class="small-heading">Stilling</h2>' + scoreboard(state) : '') +
+        nextButton('Start spørgsmålet') +
       '</section></div>';
   }
 
@@ -245,7 +246,7 @@
       '<p class="handoff-player">' + h(turn.playerName) + '</p>' :
       '<p class="handoff-player">Hele holdet</p><p class="muted">I må gerne konferere.</p>';
     return '<div class="screen center handoff">' +
-      '<p class="muted">' + h(stageLabel(state)) + '</p>' +
+      '<p class="muted">' + h(stageLabel(state)) + ' · Svar ' + turn.answerNumber + ' af ' + E.ANSWERS_PER_TEAM + '</p>' +
       '<p class="handoff-kicker">Giv enheden til</p>' +
       '<h1 class="handoff-team">' + h(turn.team.name) + '</h1>' + who +
       '<button class="btn btn-primary btn-big" data-action="ready">Jeg er klar</button>' +
@@ -259,7 +260,8 @@
     var fb = r.lastFeedback;
     var multi = turn.slots > 1;
     var fbHtml = fb ? '<p class="feedback" role="alert">' + h(fb.message) + '</p>' : '';
-    var who = h(turn.team.name) + (turn.playerName ? ' — ' + h(turn.playerName) : ' — hele holdet');
+    var who = h(turn.team.name) + (turn.playerName ? ' — ' + h(turn.playerName) : '') +
+      ' · svar ' + turn.answerNumber + ' af ' + E.ANSWERS_PER_TEAM;
 
     var fields = '';
     for (var i = 0; i < turn.slots; i++) {
@@ -345,15 +347,18 @@
   function roundSummary(state) {
     var r = state.round;
     var q = question(state);
-    var given = r.roundGiven || r.given;
+    var given = r.given;
     var givenNames = given.map(function (g) { return g.matched; });
 
     var rows = r.order.map(function (id) {
       var answers = given.filter(function (g) { return g.teamId === id; }).map(function (g) {
         return '<span class="chip' + (isMiss(g) ? ' chip-wrong' : '') + '">' + h(entryLabel(g)) + ' <b>' + g.score + '</b></span>';
       }).join(' ');
-      return '<tr><th scope="row">' + h(teamName(state, id)) + '</th><td>' + answers + '</td><td class="num">' + E.findTeam(state, id).roundScore + '</td></tr>';
+      var t = E.findTeam(state, id);
+      return '<tr><th scope="row">' + h(t.name) + '</th><td>' + answers + '</td><td class="num">+' + t.questionScore + '</td>' +
+        '<td class="num total">' + fmt(t.totalScore) + '</td></tr>';
     }).join('');
+    var gameEnds = state.teams.some(function (t) { return t.totalScore >= E.TARGET_SCORE; });
 
     var hasPointless = q.answers.some(function (a) { return a.score === 0; });
     var pointless = q.answers.filter(function (a) { return a.score === 0 && givenNames.indexOf(a.name) === -1; });
@@ -370,77 +375,37 @@
         .map(function (a) { return '<li>' + h(a.name) + ' <b>' + a.score + '</b></li>'; }).join('');
 
     var panel = questionHeader(q) +
-      '<h2 class="small-heading">Rundens svar</h2>' +
-      '<div class="table-wrap"><table class="summary-table"><thead><tr><th>Hold</th><th>Svar</th><th class="num">Point</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<h2 class="small-heading">Spørgsmålets svar</h2>' +
+      '<div class="table-wrap"><table class="summary-table"><thead><tr><th>Hold</th><th>Svar</th>' +
+        '<th class="num">Point</th><th class="num">I alt</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<div class="summary-cols">' +
         '<div><h3 class="small-heading">Pointless-svar</h3><ul class="answer-list pointless-list">' + pointlessHtml + '</ul></div>' +
         '<div><h3 class="small-heading">Mest givne svar</h3><ol class="answer-list">' + top + '</ol></div>' +
-      '</div>' + nextButton('Hvem ryger ud?');
+      '</div>' +
+      '<h2 class="small-heading">Stilling — første hold til ' + fmt(E.TARGET_SCORE) + ' point taber</h2>' + scoreboard(state, { showQuestion: true }) +
+      (gameEnds ? '<p class="feedback">Et hold har nået ' + fmt(E.TARGET_SCORE) + ' point — spillet er slut!</p>' : '') +
+      nextButton(gameEnds ? 'Se resultatet' : 'Næste spørgsmål');
     return gameLayout(state, null, panel);
   }
 
-  function tiebreak(state) {
-    var tb = state.round.tiebreak;
-    var names = tb.teamIds.map(function (id) { return '<strong>' + h(teamName(state, id)) + '</strong>'; }).join(' og ');
-    var text = tb.sameQuestion ?
-      '<p>' + names + ' står lige med flest point.</p><p>Hvert hold giver ét ekstra svar på samme spørgsmål — I må gerne konferere. Højeste score ryger ud.</p>' :
-      '<p>Stadig lige mellem ' + names + '!</p><p>Nu kommer et helt nyt spørgsmål kun til jer. Højeste score ryger ud.</p>';
-    var panel = '<h1 class="round-title">UAFGJORT!</h1>' + text + nextButton(tb.sameQuestion ? 'Start omspil' : 'Nyt spørgsmål');
-    return gameLayout(state, null, panel);
+  function names(state, ids) {
+    return ids.map(function (id) { return h(teamName(state, id)); }).join(' og ');
   }
 
-  function elimination(state) {
-    var r = state.round;
-    var out = E.findTeam(state, r.eliminatedId);
-    var remaining = E.activeTeams(state).length;
-    var panel = '<h1 class="round-title">FARVEL!</h1>' +
-      '<p class="big-text"><strong>' + h(out.name) + '</strong> er ude af spillet med ' + out.roundScore + ' point.</p>' +
-      '<p class="muted">' + remaining + ' hold er tilbage.</p>' +
-      nextButton(remaining > 2 ? 'Næste runde' : 'Videre til Head-to-Head');
-    return gameLayout(state, null, panel);
-  }
-
-  function h2hIntro(state) {
-    var r = state.round;
-    var a = E.findTeam(state, r.order[0]);
-    var b = E.findTeam(state, r.order[1]);
-    var panel = '<h1 class="round-title">HEAD-TO-HEAD</h1>' +
-      '<div class="versus"><span>' + h(a.name) + '</span><span class="vs">VS</span><span>' + h(b.name) + '</span></div>' +
-      '<p>Hvert hold konfererer og giver ét svar pr. spørgsmål. Laveste score vinder spørgsmålet. ' +
-      'Første hold til <strong>' + E.H2H_WINS_NEEDED + ' vundne spørgsmål</strong> vinder spillet.</p>' +
-      '<p class="muted">' + h(a.name) + ' svarer først på spørgsmål 1. Derefter skiftes I.</p>' +
-      nextButton('Første spørgsmål');
-    return gameLayout(state, null, panel);
-  }
-
-  function h2hResult(state) {
-    var r = state.round;
-    var answers = r.turns.map(function (turn) {
-      var entry = r.given.filter(function (g) { return g.teamId === turn.teamId; }).pop();
-      return '<li><strong>' + h(teamName(state, turn.teamId)) + '</strong>: ' + h(entryLabel(entry)) +
-        ' <b>' + entry.score + '</b></li>';
-    }).join('');
-    var finished = E.activeTeams(state).some(function (t) { return t.h2hWins >= E.H2H_WINS_NEEDED; });
-    var outcome = r.outcome.tie ?
-      '<p class="result">LIGE!</p><p>Begge hold giver et nyt svar på samme spørgsmål.</p>' :
-      '<p class="result">' + h(teamName(state, r.outcome.winnerId)) + ' vinder spørgsmålet!</p>';
-    var label = finished ? 'Se vinderen' : (r.outcome.tie ? 'Svar igen' : 'Næste spørgsmål');
-    var panel = questionHeader(question(state)) + '<ul class="answer-list">' + answers + '</ul>' + outcome + nextButton(label);
-    return gameLayout(state, null, panel);
-  }
-
-  function winner(state) {
-    var t = E.findTeam(state, state.winnerId);
+  function gameOver(state) {
+    var res = state.result;
     var confetti = '';
     for (var i = 0; i < 24; i++) {
       confetti += '<i style="left:' + ((i * 37) % 100) + '%;animation-delay:' + ((i % 8) * 0.35) + 's"></i>';
     }
+    var loserTeam = E.findTeam(state, res.loserIds[0]);
     return '<div class="screen center winner">' +
       '<div class="confetti" aria-hidden="true">' + confetti + '</div>' +
-      '<p class="intro-kicker">Og vinderen er…</p>' +
-      '<h1 class="winner-name">' + h(t.name) + '</h1>' +
-      '<p class="big-text">' + playersText(t) + '</p>' +
-      '<p class="muted">Vandt Head-to-Head ' + t.h2hWins + '–' + E.activeTeams(state).filter(function (x) { return x.id !== t.id; })[0].h2hWins + '</p>' +
+      '<p class="intro-kicker">' + (res.winnerIds.length > 1 ? 'Vinderne er…' : 'Og vinderen er…') + '</p>' +
+      '<h1 class="winner-name">' + names(state, res.winnerIds) + '</h1>' +
+      '<p class="big-text loser-line">' + names(state, res.loserIds) + ' nåede ' + fmt(loserTeam.totalScore) + ' point og taber 💥</p>' +
+      '<p class="muted">Efter ' + res.questions + ' spørgsmål</p>' +
+      '<section class="panel final-board"><h2 class="small-heading">Slutstilling</h2>' + scoreboard(state) + '</section>' +
       '<div class="row center-row">' +
         '<button class="btn btn-primary btn-big" data-action="new-game">Nyt spil</button>' +
       '</div>' +
@@ -454,11 +419,7 @@
     ANSWERING: answering,
     REVEAL: reveal,
     ROUND_SUMMARY: roundSummary,
-    TIEBREAK: tiebreak,
-    ELIMINATION: elimination,
-    H2H_INTRO: h2hIntro,
-    H2H_RESULT: h2hResult,
-    WINNER: winner
+    GAME_OVER: gameOver
   };
 
   /**

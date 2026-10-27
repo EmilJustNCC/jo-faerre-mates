@@ -2271,7 +2271,7 @@ window.JFM_QUESTIONS = {
         { name: "Manhattan", score: 14, aliases: [] },
         { name: "Tequila Sunrise", score: 11, aliases: [] },
         { name: "John Collins/Tom Collins", score: 8, aliases: ["John Collins", "Tom Collins"] },
-        { name: "Dry Martini", score: 7, aliases: [] },
+        { name: "Dry Martini", score: 7, aliases: ["Martini"] },
         { name: "Margarita", score: 7, aliases: [] },
         { name: "Singapore Sling", score: 7, aliases: [] },
         { name: "Cuba Libre", score: 6, aliases: [] },

@@ -3,16 +3,16 @@
 En dansk fan-udgave af tv-quizzen *Jo Færre Jo Bedre* (Pointless) til vennegruppen.
 Hele spillet kører på én enhed. Den gives videre mellem holdene, og **færrest point vinder**.
 
-**Version:** 1.3.0, med 44 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
+**Version:** 2.0.0, med 44 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
 
 ## Sådan spiller I
 
 1. Åbn `index.html` ved at dobbeltklikke på filen. Der er ingen installation og intet build-trin.
 2. Opret 2–6 hold med 1–2 spillere hvert i holddesigneren.
 3. Tryk **Start spillet!**
-4. I hver runde får hvert hold én tur med **3 svar**, og holdet må gerne konferere. Point for de 3 svar lægges sammen. Kan I ikke komme på flere, så skriv **"pas"**; det giver 100 point. Giv enheden videre, når skærmen siger det.
-5. Holdet med flest point i runden ryger ud. Står det lige, er der omspil med ét svar pr. hold.
-6. De to sidste hold mødes i **Head-to-Head**. Første hold til 2 vundne spørgsmål vinder.
+4. Til hvert spørgsmål giver hvert hold **2 svar**, ét ad gangen og på skift (A, B, A, B), og holdet må gerne konferere. Giv enheden videre efter hvert svar. Kan I ikke komme på et svar, så skriv **"pas"**; det giver 100 point.
+5. Pointene lægges sammen fra spørgsmål til spørgsmål, og pointtavlen nederst opdateres efter hvert svar.
+6. Når et spørgsmål er færdigt, og et hold har **1.000 point** eller mere, slutter spillet. Holdet med flest point taber, og holdet med færrest vinder.
 
 Spillet gemmes automatisk. Lukker I fanen, kan I trykke **Fortsæt spil** næste gang.
 

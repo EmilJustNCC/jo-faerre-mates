@@ -4,9 +4,9 @@
 En dansk fan-udgave af tv-quizzen "Jo Færre Jo Bedre" (Pointless) til en vennegruppe.
 Hele spillet kører på **én enhed** (computer eller telefon). Når et hold har tur, giver man
 enheden videre, og holdet indtaster selv sit svar. Hold scorer point efter, hvor mange af
-100 adspurgte der gav samme svar. Færrest point vinder.
+100 adspurgte der gav samme svar. Pointene lægges sammen; første hold til 1000 point taber.
 
-**Scope v1:** Startskærm → opret hold → 1–2 eliminationsrunder → Head-to-Head → vinder.
+**Scope:** Startskærm → opret hold → spørgsmål efter spørgsmål med samlet pointtavle → slutstilling (vinder/taber). (v1 havde eliminationsrunder og Head-to-Head; erstattet i v2.0.0.)
 **Ikke i v1:** Multi-device/Firebase (men arkitekturen skal gøre det let at tilføje), finale, jackpot, andre spørgsmålstyper end "Open-Ended", editor til spørgsmål.
 
 **Vigtigste krav:** Det skal virke stabilt fra ende til anden på én enhed.
@@ -79,40 +79,37 @@ Script-rækkefølge i `index.html`: `questions.js → matcher.js → game-engine
 1. **Startskærm:** titlen "JO FÆRRE MATES JO BEDRE" i stor, blinkende retro-arkadeskrift. Menu: *Opret hold*, *Start spillet!* (inaktiv indtil mindst 2 hold) og *Fortsæt spil* (kun hvis et gemt spil findes).
 2. **Opret hold:** holdnavn + 1 eller 2 spillernavne → holdet tilføjes i et "holddesigner"-sidepanel, hvor hold også kan redigeres eller slettes.
 3. **"Start spillet!"** → kort intro-animation.
-4. **Rundeintro:** rækkefølge og regler for runden (3 svar, "pas" = 100 point). Spørgsmålet vises ikke endnu.
-5. **Overleveringsskærm:** "Giv enheden til [HOLD] — Hele holdet" med knappen *Jeg er klar*. Spørgsmålet og svarfelterne vises først efter klik, så holdene ikke kan se hinandens svar.
-6. **Svarskærm:** spørgsmål, instruktion, tidligere givne svar i runden, **3 svarfelter** (1 i omspil/H2H) og *Gem 3 svar* → svarene afsløres **ét ad gangen** med countdown-animation (*Næste svar*) → turens samlede point → *Næste*.
-7. Efter runden: opsummering med pointless-svar og de mest givne svar → holdet med flest point elimineres. Gentag til 2 hold er tilbage → **Head-to-Head** → vinderskærm med *Nyt spil*.
+4. **Spørgsmålsintro:** "SPØRGSMÅL N", rækkefølge, regler (2 svar hver på skift, "pas" = 100, første til 1000 taber) og stillingen. Spørgsmålet vises ikke endnu.
+5. **Overleveringsskærm:** "Giv enheden til [HOLD] — Hele holdet · Svar X af 2" med knappen *Jeg er klar*. Spørgsmålet og svarfeltet vises først efter klik.
+6. **Svarskærm:** spørgsmål, instruktion, tidligere givne svar, **ét svarfelt** og *Gem svar* → countdown-animation → resultat → *Næste* → enheden går videre til næste hold.
+7. Efter spørgsmålet: opsummering med alle svar, point for spørgsmålet, samlet point, pointless-svar, mest givne svar og **stilling**. Har et hold nået 1000 → **slutskærm** (vinder, taber, slutstilling, *Nyt spil*); ellers næste spørgsmål.
+8. **Pointtavle:** podierne nederst på spilskærmen viser hvert holds samlede point, "+X dette spørgsmål" og en bjælke mod 1000. Opdateres efter hvert afsløret svar.
 
 ## Spilleregler (implementeres i `game-engine.js`)
 
 ### Point
 - Korrekt svar = svarets score (0–100). Score 0 = **POINTLESS**.
 - Forkert svar = 100 point.
-- **"pas"** (store/små bogstaver ligegyldigt) = 100 point. Kan bruges i alle faser og flere gange i samme tur.
-- Hvert svar må kun gives én gang pr. spørgsmål — heller ikke to gange i samme tur. Et svar, der allerede er givet, afvises med "Det svar er allerede brugt — prøv igen".
-- Er ét af turens felter tomt, tvetydigt eller en dublet, afvises **hele turen** med besked om feltet ("Svar 2: …"), og felterne bevares.
+- **"pas"** (store/små bogstaver ligegyldigt) = 100 point.
+- Hvert svar må kun gives én gang pr. spørgsmål. Et svar, der allerede er givet, afvises med "Det svar er allerede brugt — prøv igen".
+- Tomt, tvetydigt eller dublet-svar afvises uden at tælle; holdet svarer igen.
 
-### Eliminationsrunder
-- Hver runde har ét spørgsmål. Hvert hold har **én tur med 3 svar** og konfererer (ingen 1./2. pas, intet spillervalg; ændret i v1.2.0).
-- Turens point = **summen** af de 3 svar.
-- Rækkefølge: Runde 1 = tilfældig lodtrækning. Runde 2+ = stigende efter point i forrige runde.
-- Runderne scores hver for sig (nulstilles mellem runder).
-- Holdet med flest point i runden elimineres.
-- **Uafgjort om højeste score:** de berørte hold konfererer og giver **ét** ekstra svar på samme spørgsmål i rundens rækkefølge. Står det stadig lige, spilles et nyt spørgsmål kun mellem de berørte hold.
-- Antal runder er dynamisk: elimineringsrunder fortsætter, til der er 2 hold tilbage. Starter man med 2 hold, går man direkte til Head-to-Head.
+### Spørgsmål og ture (v2.0.0)
+- Hvert spørgsmål: hvert hold giver **2 svar** (`ANSWERS_PER_TEAM`), **ét ad gangen og på skift** — A, B, C, A, B, C. Enheden går videre efter hvert svar. Holdet konfererer (intet spillervalg).
+- Startholdet: spørgsmål 1 = lodtrækning; derefter roterer det (forrige rækkefølge flyttet én plads).
+- Motoren understøtter flere felter pr. tur (`slots`, `ANSWERS_PER_TURN`), men spillet bruger 1.
 
-### Head-to-Head
-- Hvert hold konfererer og giver ét svar pr. spørgsmål (overleveringsskærm pr. hold).
-- Holdene skiftes til at svare først.
-- Laveste score vinder spørgsmålet. Ved lighed giver begge hold et nyt svar på samme spørgsmål.
-- Første hold til **2 vundne spørgsmål** vinder spillet.
+### Samlet score og slut
+- Hvert afsløret svar lægges til holdets `questionScore` og `totalScore` (samlet for hele spillet).
+- Når et spørgsmål er færdigt og mindst ét hold har **≥ 1000 point** (`TARGET_SCORE`), slutter spillet — spørgsmålet spilles altid færdigt, så alle hold har svaret lige mange gange.
+- Holdet/holdene med **flest** point taber; holdet/holdene med **færrest** vinder (`state.result = { loserIds, winnerIds, questions }`).
+- Ingen eliminering, intet omspil, intet Head-to-Head (fjernet i v2.0.0).
 
 ### Spørgsmålsforbrug
 - Et spørgsmål bruges kun én gang pr. spil. Hvis banken løber tør, genbrug spørgsmål med en tydelig `console.warn`, så spillet kan testes fra ende til anden.
 
 ### Faser (state machine)
-`SETUP → INTRO → ROUND_INTRO → HANDOFF → ANSWERING → REVEAL (× antal svar) → (HANDOFF for næste | ROUND_SUMMARY) → (TIEBREAK) → ELIMINATION → … → H2H_INTRO → HANDOFF → ANSWERING → REVEAL → H2H_RESULT → … → WINNER`
+`SETUP → INTRO → ROUND_INTRO → (HANDOFF → ANSWERING → REVEAL) × (hold × 2) → ROUND_SUMMARY → (ROUND_INTRO for næste spørgsmål | GAME_OVER)`
 
 ### Actions (eksempler)
 `ADD_TEAM`, `EDIT_TEAM`, `REMOVE_TEAM`, `START_GAME`, `CONFIRM_READY`, `SUBMIT_ANSWER` (`{ texts: [..] }`, ét pr. felt), `REVEAL_DONE` (afslører `round.revealIdx`), `NEXT` (næste svar i reveal eller næste fase), `NEW_GAME`.
@@ -121,7 +118,7 @@ Engine kalder `matcher.js` ved `SUBMIT_ANSWER`. Tilfældighed (lodtrækning) mod
 ## Svar-matchning (`matcher.js`)
 1. **Normalisering:** små bogstaver, trim, fjern accenter (ş→s, ö→o, é→e), æ→ae, ø→oe, å→aa, fjern tegnsætning og bindestreger, saml mellemrum.
 2. **Eksakt match** mod navn eller et af svarets `aliases`.
-3. **Fuzzy match** med Levenshtein-afstand: ≤1 for svar på op til 7 tegn, ≤2 for 8–10 tegn, ≤3 for længere (strammet i v1.3.0, så "Milano" ikke godkendes som "Malabo"). Tal skal være ens ("Toy Story 4" ≠ "Toy Story 3"). Svar/aliasser under 4 tegn (forkortelser som SF, DF) skal matches præcist.
+3. **Fuzzy match** med Levenshtein-afstand: ≤1 for svar på op til 10 tegn, ≤2 for 11–15 tegn, ≤3 for længere (strammet i v1.3.0 og v2.0.0, så fx "Milano" ≠ "Malabo" og "Martini" ≠ "Martinez"). Tal skal være ens ("Toy Story 4" ≠ "Toy Story 3"). Svar/aliasser under 4 tegn (forkortelser som SF, DF) skal matches præcist.
    - Derefter **ord-match**: input som hele ord i svaret ("Riis" → Bjarne Riis), svaret som hele ord i input når de øvrige ord er fyldord som FC/United/City ("Leeds United" → Leeds), og bøjningsformer ("Lund" → Lunds Universitet).
 4. **Tvetydighed:** hvis flere svar matcher lige godt (fx "Manchester"), afvises inputtet med "Vær mere præcis" — det tæller ikke som forkert.
 5. Intet match → forkert svar (100 point).
@@ -149,34 +146,32 @@ window.JFM_QUESTIONS = {
 ### Game state (gemmes i localStorage under nøglen `jfm-game-v1`)
 ```json
 {
-  "version": 2,
+  "version": 3,
   "phase": "REVEAL",
   "teams": [
-    { "id": "t1", "name": "Holdnavn", "players": ["Emil", "Jonas"], "roundScore": 39, "eliminated": false, "h2hWins": 0 }
+    { "id": "t1", "name": "Holdnavn", "players": ["Emil", "Jonas"], "totalScore": 439, "questionScore": 39 }
   ],
   "usedQuestionIds": ["aus-nz-cities"],
   "round": {
-    "type": "elimination",
-    "number": 1,
+    "number": 4,
     "questionId": "aus-nz-cities",
-    "stage": "main",
-    "order": ["t3", "t1", "t2"],
-    "turns": [{ "teamId": "t3", "playerIdx": null, "slots": 3 }],
+    "order": ["t1", "t2"],
+    "turns": [{ "teamId": "t1", "playerIdx": null, "slots": 1 }, { "teamId": "t2", "playerIdx": null, "slots": 1 }, "…A, B, A, B…"],
     "turnIdx": 0,
     "given": [
-      { "teamId": "t3", "player": null, "input": "Perth", "matched": "Perth", "score": 39, "status": "correct", "stage": "main" },
-      { "teamId": "t3", "player": null, "input": "pas", "matched": null, "score": 100, "status": "pass", "stage": "main" }
+      { "teamId": "t1", "player": null, "input": "Perth", "matched": "Perth", "score": 39, "status": "correct" }
     ],
-    "pending": { "teamId": "t3", "player": null, "entries": ["…turens 3 svar…"] },
-    "revealIdx": 1,
+    "pending": { "teamId": "t1", "player": null, "entries": ["…turens svar…"] },
+    "revealIdx": 0,
     "revealDone": false,
     "lastFeedback": null
   },
-  "history": []
+  "history": [{ "number": 1, "questionId": "…", "scores": { "t1": 130 } }],
+  "result": null
 }
 ```
 - Strukturen skal være ren JSON (ingen funktioner, ingen Date-objekter), så den senere kan synkroniseres via Firebase uændret.
-- `engine.migrateState` løfter ældre versioner: et v1-spil bliver til `SETUP` med de samme hold (reglerne er ændret, så et igangværende v1-spil kan ikke fortsættes).
+- `engine.migrateState` løfter ældre versioner: et v1- eller v2-spil bliver til `SETUP` med de samme hold (reglerne er ændret, så et igangværende spil kan ikke fortsættes).
 - Ved ukendt `version` i localStorage: ignorér gemt spil og start forfra.
 
 ## UI og design
