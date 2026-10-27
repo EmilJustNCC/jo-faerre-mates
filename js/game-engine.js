@@ -3,12 +3,15 @@
 (function (JFM) {
   'use strict';
 
-  var STATE_VERSION = 1;
+  // v2: 3 svar pr. hold i eliminationsrunder (erstatter 1. og 2. pas).
+  var STATE_VERSION = 2;
   var MIN_TEAMS = 2;
   var MAX_TEAMS = 6;
   var MAX_NAME_LENGTH = 24;
   var H2H_WINS_NEEDED = 2;
   var WRONG_SCORE = 100;
+  var ANSWERS_PER_TURN = 3;   // eliminationsrunder; omspil og Head-to-Head har 1 svar
+  var PASS_WORD = 'pas';      // giver samme point som et forkert svar
 
   var PHASES = [
     'SETUP', 'INTRO', 'ROUND_INTRO', 'HANDOFF', 'ANSWERING', 'REVEAL',
@@ -16,7 +19,7 @@
   ];
 
   var MESSAGES = {
-    empty: 'Skriv et svar først.',
+    empty: 'Skriv et svar — eller “pas” for 100 point.',
     ambiguous: 'Vær mere præcis.',
     duplicate: 'Det svar er allerede brugt — prøv igen.'
   };
@@ -81,26 +84,19 @@
     return question.id;
   }
 
-  function defaultPassPlayers(team) {
-    return team.players.length > 1 ? [0, 1] : [0, 0];
-  }
-
   function cleanTeam(team) {
     var players = (team.players || [])
       .map(function (p) { return String(p || '').trim(); })
       .filter(Boolean)
       .slice(0, 2);
-    var cleaned = {
+    return {
       id: String(team.id),
       name: String(team.name || '').trim(),
       players: players,
       roundScore: 0,
       eliminated: false,
-      h2hWins: 0,
-      passPlayerIdx: [0, 0]
+      h2hWins: 0
     };
-    cleaned.passPlayerIdx = defaultPassPlayers(cleaned);
-    return cleaned;
   }
 
   /**
@@ -136,6 +132,15 @@
       history: [],
       winnerId: null
     };
+  }
+
+  // Gemte spil fra ældre versioner: reglerne er ændret, så et igangværende spil kan ikke fortsættes,
+  // men holdene bevares. Ukendte versioner returneres uændret (og afvises af isValidState).
+  function migrateState(state) {
+    if (state && state.version === 1 && Array.isArray(state.teams)) {
+      return createInitialState(state.teams);
+    }
+    return state;
   }
 
   function isValidState(state) {
@@ -175,10 +180,7 @@
       });
     }
 
-    state.teams.forEach(function (t) {
-      t.roundScore = 0;
-      t.passPlayerIdx = defaultPassPlayers(t);
-    });
+    state.teams.forEach(function (t) { t.roundScore = 0; });
 
     var questionId = pickQuestion(state, ctx.bank, ctx.rng);
     state.round = {
@@ -186,14 +188,14 @@
       number: number,
       questionId: questionId,
       originalQuestionId: questionId,
-      stage: 'pass1',
-      pass: 1,
+      stage: 'main',
       order: order,
       turns: [],
       turnIdx: 0,
       given: [],
       roundGiven: [],
       pending: null,
+      revealIdx: 0,
       revealDone: false,
       lastFeedback: null,
       tiebreak: null,
@@ -203,14 +205,12 @@
     return state;
   }
 
-  function beginPass(state, pass) {
+  // Én tur pr. hold med 3 svar. Holdet konfererer, så der er ingen bestemt spiller.
+  function beginMainTurns(state) {
     var round = state.round;
-    var order = pass === 1 ? round.order.slice() : round.order.slice().reverse();
-    round.stage = pass === 1 ? 'pass1' : 'pass2';
-    round.pass = pass;
-    round.turns = order.map(function (teamId) {
-      var team = findTeam(state, teamId);
-      return { teamId: teamId, playerIdx: team.passPlayerIdx[pass - 1] };
+    round.stage = 'main';
+    round.turns = round.order.map(function (teamId) {
+      return { teamId: teamId, playerIdx: null, slots: ANSWERS_PER_TURN };
     });
     round.turnIdx = 0;
     state.phase = 'HANDOFF';
@@ -221,7 +221,7 @@
     var round = state.round;
     round.stage = 'tiebreak';
     round.turns = round.tiebreak.teamIds.map(function (teamId) {
-      return { teamId: teamId, playerIdx: null };  // holdet konfererer
+      return { teamId: teamId, playerIdx: null, slots: 1 };  // holdet konfererer
     });
     round.turnIdx = 0;
     state.phase = 'HANDOFF';
@@ -304,12 +304,12 @@
       number: 0,
       questionId: null,
       stage: 'h2h',
-      pass: 1,
       order: order,
       turns: [],
       turnIdx: 0,
       given: [],
       pending: null,
+      revealIdx: 0,
       revealDone: false,
       lastFeedback: null,
       attempt: 1,
@@ -331,7 +331,7 @@
     round.attempt = 1;
     round.scores = {};
     round.outcome = null;
-    round.turns = [{ teamId: first, playerIdx: null }, { teamId: second, playerIdx: null }];
+    round.turns = [{ teamId: first, playerIdx: null, slots: 1 }, { teamId: second, playerIdx: null, slots: 1 }];
     round.turnIdx = 0;
     state.phase = 'HANDOFF';
     return state;
@@ -368,6 +368,7 @@
   function advanceTurn(state, ctx) {
     var round = state.round;
     round.pending = null;
+    round.revealIdx = 0;
     round.revealDone = false;
     round.turnIdx += 1;
     if (round.turnIdx < round.turns.length) {
@@ -375,8 +376,7 @@
       return state;
     }
     switch (round.stage) {
-      case 'pass1': return beginPass(state, 2);
-      case 'pass2':
+      case 'main':
         round.roundGiven = round.given.slice();
         state.phase = 'ROUND_SUMMARY';
         return state;
@@ -406,7 +406,6 @@
       var cleaned = cleanTeam(action.team);
       team.name = cleaned.name;
       team.players = cleaned.players;
-      team.passPlayerIdx = cleaned.passPlayerIdx;
       return state;
     },
 
@@ -423,16 +422,6 @@
       return fresh;
     },
 
-    CHOOSE_PASS_PLAYER: function (state, action) {
-      if (state.phase !== 'ROUND_INTRO') return null;
-      var team = findTeam(state, action.teamId);
-      if (!team || state.round.order.indexOf(team.id) === -1) return null;
-      var idx = Number(action.playerIdx);
-      if (!(idx >= 0 && idx < team.players.length)) return null;
-      team.passPlayerIdx = team.players.length > 1 ? [idx, 1 - idx] : [0, 0];
-      return state;
-    },
-
     CONFIRM_READY: function (state) {
       if (state.phase !== 'HANDOFF') return null;
       state.round.lastFeedback = null;
@@ -440,52 +429,78 @@
       return state;
     },
 
+    // action.texts: ét svar pr. felt i turen (3 i eliminationsrunder, 1 i omspil/H2H).
+    // action.text accepteres også ved ture med ét felt.
+    // Er ét felt tomt, tvetydigt eller en dublet, afvises hele turen, og felterne bevares i lastFeedback.inputs.
     SUBMIT_ANSWER: function (state, action, ctx) {
       if (state.phase !== 'ANSWERING') return null;
       var round = state.round;
       var turn = round.turns[round.turnIdx];
       if (action.teamId && action.teamId !== turn.teamId) return null;
 
-      var text = String(action.text == null ? '' : action.text).trim();
-      if (!text) {
-        round.lastFeedback = { type: 'empty', message: MESSAGES.empty };
-        return state;
-      }
+      var slots = turn.slots || 1;
+      var raw = Array.isArray(action.texts) ? action.texts : [action.text];
+      if (raw.length !== slots) return null;
+      var texts = raw.map(function (t) { return String(t == null ? '' : t).trim(); });
 
       var question = findQuestion(ctx.bank, round.questionId);
-      var givenNames = round.given
+      var usedNames = round.given
         .filter(function (g) { return g.matched; })
         .map(function (g) { return g.matched; });
-      var result = JFM.matcher.matchAnswer(text, question, givenNames);
+      var team = findTeam(state, turn.teamId);
+      var player = turn.playerIdx == null ? null : team.players[turn.playerIdx];
+      var entries = [];
 
-      if (result.status === 'ambiguous' || result.status === 'duplicate') {
-        round.lastFeedback = { type: result.status, message: MESSAGES[result.status], input: text };
-        return state;
+      for (var i = 0; i < texts.length; i++) {
+        var text = texts[i];
+        var problem = null;
+        var outcome = null;
+        if (!text) {
+          problem = 'empty';
+        } else if (JFM.matcher.normalize(text) === PASS_WORD) {
+          outcome = { status: 'pass', answer: null, score: WRONG_SCORE };
+        } else {
+          // usedNames indeholder også turens egne tidligere felter, så holdet ikke kan bruge samme svar to gange.
+          var result = JFM.matcher.matchAnswer(text, question, usedNames);
+          if (result.status === 'ambiguous' || result.status === 'duplicate') problem = result.status;
+          else outcome = { status: result.status, answer: result.answer, score: result.status === 'correct' ? result.score : WRONG_SCORE };
+        }
+        if (problem) {
+          round.lastFeedback = {
+            type: problem,
+            field: i,
+            message: (slots > 1 ? 'Svar ' + (i + 1) + ': ' : '') + MESSAGES[problem],
+            inputs: texts
+          };
+          return state;
+        }
+        if (outcome.answer) usedNames.push(outcome.answer);
+        entries.push({
+          teamId: turn.teamId,
+          player: player,
+          input: text,
+          matched: outcome.answer,
+          score: outcome.score,
+          status: outcome.status,
+          stage: round.stage
+        });
       }
 
-      var team = findTeam(state, turn.teamId);
-      var entry = {
-        teamId: turn.teamId,
-        player: turn.playerIdx == null ? null : team.players[turn.playerIdx],
-        input: text,
-        matched: result.answer,
-        score: result.status === 'correct' ? result.score : WRONG_SCORE,
-        status: result.status,
-        stage: round.stage
-      };
-      round.given.push(entry);
-      round.pending = entry;
+      round.given = round.given.concat(entries);
+      round.pending = { teamId: turn.teamId, player: player, entries: entries };
+      round.revealIdx = 0;
       round.revealDone = false;
       round.lastFeedback = null;
       state.phase = 'REVEAL';
       return state;
     },
 
+    // Afslører ét svar ad gangen (round.revealIdx) og lægger dets point til.
     REVEAL_DONE: function (state) {
       if (state.phase !== 'REVEAL' || state.round.revealDone) return null;
       var round = state.round;
-      var entry = round.pending;
-      if (round.stage === 'pass1' || round.stage === 'pass2') {
+      var entry = round.pending.entries[round.revealIdx];
+      if (round.stage === 'main') {
         findTeam(state, entry.teamId).roundScore += entry.score;
       } else if (round.stage === 'tiebreak') {
         round.tiebreak.scores[entry.teamId] = entry.score;
@@ -501,9 +516,15 @@
         case 'INTRO':
           return activeTeams(state).length > 2 ? startEliminationRound(state, ctx) : startH2H(state, ctx);
         case 'ROUND_INTRO':
-          return beginPass(state, 1);
+          return beginMainTurns(state);
         case 'REVEAL':
-          return state.round.revealDone ? advanceTurn(state, ctx) : null;
+          if (!state.round.revealDone) return null;
+          if (state.round.revealIdx + 1 < state.round.pending.entries.length) {
+            state.round.revealIdx += 1;   // næste af holdets svar
+            state.round.revealDone = false;
+            return state;
+          }
+          return advanceTurn(state, ctx);
         case 'ROUND_SUMMARY':
           return resolveRound(state, ctx);
         case 'TIEBREAK':
@@ -558,8 +579,16 @@
     var team = findTeam(state, turn.teamId);
     return {
       team: team,
-      playerName: turn.playerIdx == null ? null : team.players[turn.playerIdx]
+      playerName: turn.playerIdx == null ? null : team.players[turn.playerIdx],
+      slots: turn.slots || 1
     };
+  }
+
+  // Svaret, der afsløres lige nu (REVEAL).
+  function currentReveal(state) {
+    var r = state.round;
+    if (!r || !r.pending) return null;
+    return { entry: r.pending.entries[r.revealIdx], index: r.revealIdx, total: r.pending.entries.length };
   }
 
   function canStart(state) {
@@ -576,15 +605,19 @@
     MAX_TEAMS: MAX_TEAMS,
     MAX_NAME_LENGTH: MAX_NAME_LENGTH,
     H2H_WINS_NEEDED: H2H_WINS_NEEDED,
+    ANSWERS_PER_TURN: ANSWERS_PER_TURN,
+    PASS_WORD: PASS_WORD,
     PHASES: PHASES,
     reduce: reduce,
     createInitialState: createInitialState,
+    migrateState: migrateState,
     isValidState: isValidState,
     validateTeam: validateTeam,
     findTeam: findTeam,
     findQuestion: findQuestion,
     activeTeams: activeTeams,
     currentTurn: currentTurn,
+    currentReveal: currentReveal,
     canStart: canStart,
     isInProgress: isInProgress
   };

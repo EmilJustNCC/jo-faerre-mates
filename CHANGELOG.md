@@ -5,6 +5,23 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 
 ## [Ikke udgivet]
 
+## [1.2.0] - 2026-10-27
+
+### Ændret
+- **Nye regler i eliminationsrunderne:** Hvert hold får én tur med 3 svarfelter, og holdet må konferere. Point er summen af de 3 svar. Det erstatter 1. og 2. pas og spillervalget.
+- Svarene afsløres ét ad gangen med countdown-søjlen ("Næste svar"), og til sidst vises turens samlede point.
+- Omspil og Head-to-Head har stadig ét svar pr. hold.
+- Gemte spil har fået nyt format (version 2). Et spil gemt med v1.1 kan ikke fortsættes, men holdene bevares automatisk.
+
+### Tilføjet
+- **"pas"** giver 100 point. Det virker i alle faser og må bruges flere gange i samme tur.
+- Er ét felt tomt, tvetydigt eller en dublet, afvises hele turen med besked om feltet ("Svar 2: …"). De indtastede svar bevares, og fokus flyttes til fejlfeltet.
+- Et hold kan ikke give samme svar to gange i samme tur.
+- Enter i et svarfelt hopper til næste felt, og Enter i sidste felt gemmer.
+
+### Fjernet
+- Valg af spiller til 1. pas (`CHOOSE_PASS_PLAYER`).
+
 ## [1.1.0] - 2026-10-27
 
 ### Tilføjet
@@ -42,5 +59,6 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 - Backup-script (`scripts/backup.ps1`) med zip og git bundle samt en pre-commit-hook, der kører testene.
 
 [Ikke udgivet]: #
+[1.2.0]: #
 [1.1.0]: #
 [1.0.0]: #

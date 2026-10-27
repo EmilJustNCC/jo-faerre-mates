@@ -79,9 +79,9 @@ Script-rækkefølge i `index.html`: `questions.js → matcher.js → game-engine
 1. **Startskærm:** titlen "JO FÆRRE MATES JO BEDRE" i stor, blinkende retro-arkadeskrift. Menu: *Opret hold*, *Start spillet!* (inaktiv indtil mindst 2 hold) og *Fortsæt spil* (kun hvis et gemt spil findes).
 2. **Opret hold:** holdnavn + 1 eller 2 spillernavne → holdet tilføjes i et "holddesigner"-sidepanel, hvor hold også kan redigeres eller slettes.
 3. **"Start spillet!"** → kort intro-animation.
-4. **Rundeintro:** hvert hold vælger, hvem der tager 1. pas (vælges på én samlet skærm, før spørgsmålet vises).
-5. **Overleveringsskærm:** "Giv enheden til [HOLD] — [Spiller]" med knappen *Jeg er klar*. Spørgsmålet og svarfeltet vises først efter klik, så holdene ikke kan konferere.
-6. **Svarskærm:** spørgsmål, instruktion, tidligere givne svar i runden, inputfelt og *Gem svar* → **countdown-animation** → resultat og opdateret score → *Næste*.
+4. **Rundeintro:** rækkefølge og regler for runden (3 svar, "pas" = 100 point). Spørgsmålet vises ikke endnu.
+5. **Overleveringsskærm:** "Giv enheden til [HOLD] — Hele holdet" med knappen *Jeg er klar*. Spørgsmålet og svarfelterne vises først efter klik, så holdene ikke kan se hinandens svar.
+6. **Svarskærm:** spørgsmål, instruktion, tidligere givne svar i runden, **3 svarfelter** (1 i omspil/H2H) og *Gem 3 svar* → svarene afsløres **ét ad gangen** med countdown-animation (*Næste svar*) → turens samlede point → *Næste*.
 7. Efter runden: opsummering med pointless-svar og de mest givne svar → holdet med flest point elimineres. Gentag til 2 hold er tilbage → **Head-to-Head** → vinderskærm med *Nyt spil*.
 
 ## Spilleregler (implementeres i `game-engine.js`)
@@ -89,15 +89,17 @@ Script-rækkefølge i `index.html`: `questions.js → matcher.js → game-engine
 ### Point
 - Korrekt svar = svarets score (0–100). Score 0 = **POINTLESS**.
 - Forkert svar = 100 point.
-- Hvert svar må kun gives én gang pr. spørgsmål. Et svar, der allerede er givet, afvises med "Det svar er allerede brugt — prøv igen", og spilleren må svare igen.
+- **"pas"** (store/små bogstaver ligegyldigt) = 100 point. Kan bruges i alle faser og flere gange i samme tur.
+- Hvert svar må kun gives én gang pr. spørgsmål — heller ikke to gange i samme tur. Et svar, der allerede er givet, afvises med "Det svar er allerede brugt — prøv igen".
+- Er ét af turens felter tomt, tvetydigt eller en dublet, afvises **hele turen** med besked om feltet ("Svar 2: …"), og felterne bevares.
 
 ### Eliminationsrunder
-- Hver runde har ét spørgsmål og **to pas**. Hver spiller på et 2-mandshold tager ét pas. Et 1-mandshold tager begge pas.
-- Rækkefølge 1. pas: Runde 1 = tilfældig lodtrækning. Runde 2 = stigende efter point i runde 1.
-- 2. pas: omvendt rækkefølge af 1. pas.
+- Hver runde har ét spørgsmål. Hvert hold har **én tur med 3 svar** og konfererer (ingen 1./2. pas, intet spillervalg; ændret i v1.2.0).
+- Turens point = **summen** af de 3 svar.
+- Rækkefølge: Runde 1 = tilfældig lodtrækning. Runde 2+ = stigende efter point i forrige runde.
 - Runderne scores hver for sig (nulstilles mellem runder).
 - Holdet med flest point i runden elimineres.
-- **Uafgjort om højeste score:** de berørte hold må konferere og giver ét ekstra svar på samme spørgsmål i samme rækkefølge som 1. pas. Står det stadig lige, spilles et nyt spørgsmål kun mellem de berørte hold.
+- **Uafgjort om højeste score:** de berørte hold konfererer og giver **ét** ekstra svar på samme spørgsmål i rundens rækkefølge. Står det stadig lige, spilles et nyt spørgsmål kun mellem de berørte hold.
 - Antal runder er dynamisk: elimineringsrunder fortsætter, til der er 2 hold tilbage. Starter man med 2 hold, går man direkte til Head-to-Head.
 
 ### Head-to-Head
@@ -107,13 +109,13 @@ Script-rækkefølge i `index.html`: `questions.js → matcher.js → game-engine
 - Første hold til **2 vundne spørgsmål** vinder spillet.
 
 ### Spørgsmålsforbrug
-- Et spørgsmål bruges kun én gang pr. spil. Hvis banken løber tør (nu kun 2 testspørgsmål), genbrug spørgsmål med en tydelig `console.warn`, så spillet kan testes fra ende til anden.
+- Et spørgsmål bruges kun én gang pr. spil. Hvis banken løber tør, genbrug spørgsmål med en tydelig `console.warn`, så spillet kan testes fra ende til anden.
 
 ### Faser (state machine)
-`SETUP → INTRO → ROUND_INTRO (vælg spillere) → HANDOFF → ANSWERING → REVEAL → (HANDOFF for næste | ROUND_SUMMARY) → (TIEBREAK) → ELIMINATION → … → H2H_INTRO → HANDOFF → ANSWERING → REVEAL → H2H_RESULT → … → WINNER`
+`SETUP → INTRO → ROUND_INTRO → HANDOFF → ANSWERING → REVEAL (× antal svar) → (HANDOFF for næste | ROUND_SUMMARY) → (TIEBREAK) → ELIMINATION → … → H2H_INTRO → HANDOFF → ANSWERING → REVEAL → H2H_RESULT → … → WINNER`
 
 ### Actions (eksempler)
-`ADD_TEAM`, `EDIT_TEAM`, `REMOVE_TEAM`, `START_GAME`, `CHOOSE_PASS_PLAYER`, `CONFIRM_READY`, `SUBMIT_ANSWER`, `REVEAL_DONE`, `NEXT`, `NEW_GAME`.
+`ADD_TEAM`, `EDIT_TEAM`, `REMOVE_TEAM`, `START_GAME`, `CONFIRM_READY`, `SUBMIT_ANSWER` (`{ texts: [..] }`, ét pr. felt), `REVEAL_DONE` (afslører `round.revealIdx`), `NEXT` (næste svar i reveal eller næste fase), `NEW_GAME`.
 Engine kalder `matcher.js` ved `SUBMIT_ANSWER`. Tilfældighed (lodtrækning) modtages som en del af actionen (`seed` eller færdig rækkefølge), så `reduce` forbliver deterministisk.
 
 ## Svar-matchning (`matcher.js`)
@@ -146,36 +148,34 @@ window.JFM_QUESTIONS = {
 ### Game state (gemmes i localStorage under nøglen `jfm-game-v1`)
 ```json
 {
-  "version": 1,
-  "phase": "ANSWERING",
+  "version": 2,
+  "phase": "REVEAL",
   "teams": [
-    {
-      "id": "t1",
-      "name": "Holdnavn",
-      "players": ["Emil", "Jonas"],
-      "roundScore": 0,
-      "eliminated": false,
-      "h2hWins": 0,
-      "passPlayerIdx": [0, 1]
-    }
+    { "id": "t1", "name": "Holdnavn", "players": ["Emil", "Jonas"], "roundScore": 39, "eliminated": false, "h2hWins": 0 }
   ],
   "usedQuestionIds": ["aus-nz-cities"],
   "round": {
     "type": "elimination",
     "number": 1,
     "questionId": "aus-nz-cities",
-    "pass": 1,
+    "stage": "main",
     "order": ["t3", "t1", "t2"],
-    "turnIdx": 1,
+    "turns": [{ "teamId": "t3", "playerIdx": null, "slots": 3 }],
+    "turnIdx": 0,
     "given": [
-      { "teamId": "t3", "player": "Ida", "input": "Perth", "matched": "Perth", "score": 39 }
+      { "teamId": "t3", "player": null, "input": "Perth", "matched": "Perth", "score": 39, "status": "correct", "stage": "main" },
+      { "teamId": "t3", "player": null, "input": "pas", "matched": null, "score": 100, "status": "pass", "stage": "main" }
     ],
+    "pending": { "teamId": "t3", "player": null, "entries": ["…turens 3 svar…"] },
+    "revealIdx": 1,
+    "revealDone": false,
     "lastFeedback": null
   },
   "history": []
 }
 ```
 - Strukturen skal være ren JSON (ingen funktioner, ingen Date-objekter), så den senere kan synkroniseres via Firebase uændret.
+- `engine.migrateState` løfter ældre versioner: et v1-spil bliver til `SETUP` med de samme hold (reglerne er ændret, så et igangværende v1-spil kan ikke fortsættes).
 - Ved ukendt `version` i localStorage: ignorér gemt spil og start forfra.
 
 ## UI og design

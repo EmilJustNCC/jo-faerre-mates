@@ -79,6 +79,18 @@
     T.eq(store.getState().teams, []);
   });
 
+  T.test('store: gemt spil fra v1 migreres ved indlæsning (holdene bevares)', function () {
+    var storage = fakeStorage();
+    storage.data[KEY] = JSON.stringify({
+      version: 1, phase: 'ROUND_INTRO', usedQuestionIds: [], history: [], round: {},
+      teams: [{ id: 'a', name: 'Gammelt hold', players: ['P'], roundScore: 3, eliminated: false, h2hWins: 0, passPlayerIdx: [0, 0] }]
+    });
+    var store = makeStore(storage);
+    T.eq(store.restoredFrom(), 'main');
+    T.eq(store.getState().phase, 'SETUP');
+    T.eq(store.getState().teams[0].name, 'Gammelt hold');
+  });
+
   T.test('store: reset rydder spillet, men gendanner ikke fra backup bagefter', function () {
     var storage = fakeStorage();
     var store = makeStore(storage);

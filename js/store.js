@@ -5,7 +5,7 @@
 //   - Hovedslot   `jfm-game-v1`         : seneste state.
 //   - Backupslot  `jfm-game-v1-backup`  : forrige gemte state (rullende, én version tilbage).
 //   Er hovedslottet korrupt eller ugyldigt ved opstart, gendannes fra backupslottet.
-//   Ukendt `version` ignoreres (spillet starter forfra), jf. CLAUDE.md.
+//   Ældre versioner migreres via engine.migrateState (holdene bevares); ukendt `version` ignoreres, jf. CLAUDE.md.
 //   exportState()/importState() giver en manuel backup som JSON-fil.
 (function (JFM) {
   'use strict';
@@ -48,7 +48,7 @@
     function parse(raw) {
       if (!raw) return null;
       try {
-        var parsed = JSON.parse(raw);
+        var parsed = engine.migrateState(JSON.parse(raw));
         return engine.isValidState(parsed) ? parsed : null;
       } catch (e) {
         return null;
@@ -130,7 +130,7 @@
       importState: function (json) {
         var data;
         try { data = JSON.parse(json); } catch (e) { return 'Filen er ikke gyldig JSON.'; }
-        var candidate = data && data.format === EXPORT_FORMAT ? data.state : data;
+        var candidate = engine.migrateState(data && data.format === EXPORT_FORMAT ? data.state : data);
         if (!engine.isValidState(candidate)) return 'Filen indeholder ikke et gyldigt spil fra denne version.';
         replaceState(candidate, { type: '@@IMPORT' });
         return null;

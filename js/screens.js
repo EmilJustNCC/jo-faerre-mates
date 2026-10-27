@@ -32,11 +32,19 @@
       return 'Head-to-Head · Spørgsmål ' + r.number + (r.attempt > 1 ? ' · Nyt forsøg' : '');
     }
     var byPhaseLabel = { ROUND_SUMMARY: 'Resultat', TIEBREAK: 'Omspil', ELIMINATION: 'Eliminering' };
-    var stage = byPhaseLabel[state.phase] || { pass1: '1. pas', pass2: '2. pas', tiebreak: 'Omspil' }[r.stage] || '';
+    var stage = byPhaseLabel[state.phase] || (r.stage === 'tiebreak' ? 'Omspil' : '');
     return 'Runde ' + r.number + (stage ? ' · ' + stage : '');
   }
 
   function playersText(team) { return team.players.map(h).join(' & '); }
+
+  // Tekst for et givet svar: det matchede navn, "Pas" eller det indtastede (ved forkert svar).
+  function entryLabel(entry) {
+    if (entry.status === 'pass') return 'Pas';
+    return entry.matched || entry.input;
+  }
+
+  function isMiss(entry) { return entry.status === 'wrong' || entry.status === 'pass'; }
 
   // ---------- Fælles byggesten ----------
 
@@ -98,12 +106,12 @@
   }
 
   function givenList(state) {
-    var given = state.round.given;
+    // "Pas" vises ikke her — det er ikke et svar, andre kan bruge.
+    var given = state.round.given.filter(function (g) { return g.status !== 'pass'; });
     if (!given.length) return '<p class="muted small">Ingen svar endnu i denne runde.</p>';
     return '<ul class="chips">' + given.map(function (g) {
-      var label = g.matched || g.input;
-      return '<li class="chip' + (g.status === 'wrong' ? ' chip-wrong' : '') + '" title="' + h(teamName(state, g.teamId)) + '">' +
-        h(label) + ' <b>' + g.score + '</b></li>';
+      return '<li class="chip' + (isMiss(g) ? ' chip-wrong' : '') + '" title="' + h(teamName(state, g.teamId)) + '">' +
+        h(entryLabel(g)) + ' <b>' + g.score + '</b></li>';
     }).join('') + '</ul>';
   }
 
@@ -214,26 +222,18 @@
     var r = state.round;
     var rows = r.order.map(function (id, i) {
       var t = E.findTeam(state, id);
-      var choice;
-      if (t.players.length > 1) {
-        choice = '<div class="choice" role="group" aria-label="Hvem tager 1. pas for ' + h(t.name) + '">' +
-          t.players.map(function (p, idx) {
-            var on = t.passPlayerIdx[0] === idx;
-            return '<button class="btn btn-toggle' + (on ? ' on' : '') + '" aria-pressed="' + on + '" data-action="choose-pass" data-team="' + h(t.id) + '" data-idx="' + idx + '">' + h(p) + '</button>';
-          }).join('') + '</div>';
-      } else {
-        choice = '<p class="muted small">' + h(t.players[0]) + ' tager begge pas.</p>';
-      }
       return '<li class="order-row"><span class="order-num">' + (i + 1) + '</span>' +
         '<div class="order-team"><strong>' + h(t.name) + '</strong>' +
-        (t.players.length > 1 ? '<span class="muted small">Hvem tager 1. pas?</span>' : '') + '</div>' + choice + '</li>';
+        '<span class="muted small">' + playersText(t) + '</span></div></li>';
     }).join('');
 
     var orderNote = r.number === 1 ? 'Rækkefølgen er trukket lod.' : 'Rækkefølgen går efter færrest point i sidste runde.';
     return '<div class="screen game">' + topBar(state) +
       '<section class="panel round-intro">' +
         '<h1 class="round-title">RUNDE ' + r.number + '</h1>' +
-        '<p class="muted">' + orderNote + ' 2. pas tages i omvendt rækkefølge. Spørgsmålet vises først, når enheden er givet videre.</p>' +
+        '<p>Hvert hold giver <strong>' + E.ANSWERS_PER_TURN + ' svar</strong> og må gerne konferere. Pointene for de ' +
+          E.ANSWERS_PER_TURN + ' svar lægges sammen. Kan I ikke komme på flere, så skriv <strong>“pas”</strong> — det giver 100 point.</p>' +
+        '<p class="muted">' + orderNote + ' Spørgsmålet vises først, når enheden er givet videre.</p>' +
         '<ol class="order-list">' + rows + '</ol>' +
         nextButton('Start runden') +
       '</section></div>';
@@ -256,20 +256,41 @@
   function answering(state) {
     var r = state.round;
     var turn = E.currentTurn(state);
-    var fb = r.lastFeedback ? '<p class="feedback" role="alert">' + h(r.lastFeedback.message) + '</p>' : '';
+    var fb = r.lastFeedback;
+    var multi = turn.slots > 1;
+    var fbHtml = fb ? '<p class="feedback" role="alert">' + h(fb.message) + '</p>' : '';
     var who = h(turn.team.name) + (turn.playerName ? ' — ' + h(turn.playerName) : ' — hele holdet');
+
+    var fields = '';
+    for (var i = 0; i < turn.slots; i++) {
+      var value = fb && fb.inputs ? fb.inputs[i] : '';
+      var invalid = fb && fb.field === i;
+      var last = i === turn.slots - 1;
+      fields += '<div class="answer-field">' +
+        (multi ? '<span class="answer-num" aria-hidden="true">' + (i + 1) + '</span>' : '') +
+        '<label class="visually-hidden" for="answer-input-' + i + '">Svar ' + (i + 1) + '</label>' +
+        '<input id="answer-input-' + i + '" name="answer" value="' + h(value) + '"' +
+          (invalid ? ' class="invalid" aria-invalid="true"' : '') +
+          ' placeholder="' + (multi ? 'Svar ' + (i + 1) + '…' : 'Skriv jeres svar…') + '"' +
+          ' autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="' + (last ? 'done' : 'next') + '">' +
+      '</div>';
+    }
+
     var panel = questionHeader(question(state)) +
       '<p class="turn-label">Tur: <strong>' + who + '</strong></p>' +
-      '<form class="answer-form" data-form="answer" autocomplete="off">' +
-        '<label class="visually-hidden" for="answer-input">Dit svar</label>' +
-        '<input id="answer-input" name="answer" placeholder="Skriv dit svar…" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done">' +
-        '<button class="btn btn-primary btn-big" type="submit">Gem svar</button>' +
-      '</form>' + fb +
+      '<form class="answer-form' + (multi ? ' answer-form-multi' : '') + '" data-form="answer" autocomplete="off" novalidate>' +
+        '<div class="answer-fields">' + fields + '</div>' +
+        '<button class="btn btn-primary btn-big" type="submit">' + (multi ? 'Gem ' + turn.slots + ' svar' : 'Gem svar') + '</button>' +
+      '</form>' + fbHtml +
+      '<p class="muted small answer-hint">Skriv “pas”, hvis I ikke kan komme på ' + (multi ? 'flere' : 'et svar') + ' — det giver 100 point.</p>' +
       '<h3 class="small-heading">Allerede givet</h3>' + givenList(state);
     return gameLayout(state, countdownEl(100), panel);
   }
 
   function resultText(entry) {
+    if (entry.status === 'pass') {
+      return '<p class="result result-wrong">PAS — 100 point</p>';
+    }
     if (entry.status === 'wrong') {
       return '<p class="result result-wrong">FORKERT — 100 point</p>' +
         '<p class="muted">“' + h(entry.input) + '” er ikke på listen.</p>';
@@ -282,17 +303,41 @@
     return '<p class="result">' + entry.score + ' point</p><p class="result-answer">' + h(entry.matched) + '</p>' + corrected;
   }
 
+  // Oversigt over holdets svar i turen: afslørede med point, det aktuelle fremhævet, resten venter.
+  function revealList(state, rv) {
+    var r = state.round;
+    return '<ol class="reveal-list">' + r.pending.entries.map(function (e, i) {
+      var shown = i < rv.index || (i === rv.index && r.revealDone);
+      var cls = (i === rv.index ? 'current' : '') + (shown && isMiss(e) ? ' miss' : '') + (shown && !isMiss(e) && e.score === 0 ? ' pointless' : '');
+      return '<li class="' + cls.trim() + '"><span class="reveal-input">' + h(shown ? entryLabel(e) : e.input) + '</span>' +
+        '<b class="reveal-score">' + (shown ? e.score : '?') + '</b></li>';
+    }).join('') + '</ol>';
+  }
+
   function reveal(state) {
     var r = state.round;
-    var entry = r.pending;
-    var body = r.revealDone ?
-      resultText(entry) + nextButton('Næste') :
-      '<p class="result-waiting">Svar: <strong>“' + h(entry.input) + '”</strong></p><p class="muted">Lad os se, hvor mange der sagde det…</p>';
+    var rv = E.currentReveal(state);
+    var entry = rv.entry;
+    var multi = rv.total > 1;
+    var isLast = rv.index === rv.total - 1;
+    var total = r.pending.entries.reduce(function (sum, e) { return sum + e.score; }, 0);
+
+    var body;
+    if (r.revealDone) {
+      body = resultText(entry) +
+        (multi && isLast ? '<p class="turn-total">I alt denne tur: <strong>' + total + ' point</strong></p>' : '') +
+        nextButton(multi && !isLast ? 'Næste svar' : 'Næste');
+    } else {
+      body = '<p class="result-waiting">' + (multi ? 'Svar ' + (rv.index + 1) + ' af ' + rv.total + ': ' : 'Svar: ') +
+        '<strong>“' + h(entry.input) + '”</strong></p>' +
+        '<p class="muted">' + (entry.status === 'pass' ? 'Holdet passede…' : 'Lad os se, hvor mange der sagde det…') + '</p>';
+    }
     var panel = questionHeader(question(state)) +
       '<p class="turn-label"><strong>' + h(teamName(state, entry.teamId)) + '</strong>' + (entry.player ? ' — ' + h(entry.player) : '') + '</p>' +
+      (multi ? revealList(state, rv) : '') +
       '<div class="reveal-body" aria-live="polite">' + body + '</div>';
     var cd = r.revealDone ?
-      countdownEl(entry.score, { wrong: entry.status === 'wrong' }) :
+      countdownEl(entry.score, { wrong: isMiss(entry) }) :
       countdownEl(100, { animate: true });
     return gameLayout(state, cd, panel);
   }
@@ -305,7 +350,7 @@
 
     var rows = r.order.map(function (id) {
       var answers = given.filter(function (g) { return g.teamId === id; }).map(function (g) {
-        return '<span class="chip' + (g.status === 'wrong' ? ' chip-wrong' : '') + '">' + h(g.matched || g.input) + ' <b>' + g.score + '</b></span>';
+        return '<span class="chip' + (isMiss(g) ? ' chip-wrong' : '') + '">' + h(entryLabel(g)) + ' <b>' + g.score + '</b></span>';
       }).join(' ');
       return '<tr><th scope="row">' + h(teamName(state, id)) + '</th><td>' + answers + '</td><td class="num">' + E.findTeam(state, id).roundScore + '</td></tr>';
     }).join('');
@@ -368,7 +413,7 @@
     var r = state.round;
     var answers = r.turns.map(function (turn) {
       var entry = r.given.filter(function (g) { return g.teamId === turn.teamId; }).pop();
-      return '<li><strong>' + h(teamName(state, turn.teamId)) + '</strong>: ' + h(entry.matched || entry.input) +
+      return '<li><strong>' + h(teamName(state, turn.teamId)) + '</strong>: ' + h(entryLabel(entry)) +
         ' <b>' + entry.score + '</b></li>';
     }).join('');
     var finished = E.activeTeams(state).some(function (t) { return t.h2hWins >= E.H2H_WINS_NEEDED; });

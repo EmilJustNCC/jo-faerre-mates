@@ -2,7 +2,7 @@
 (function (JFM) {
   'use strict';
 
-  JFM.APP_VERSION = '1.1.0';
+  JFM.APP_VERSION = '1.2.0';
 
   var E = JFM.engine;
   var root;
@@ -46,8 +46,14 @@
       else JFM.countdown.render(el, Number(el.getAttribute('data-value')), { wrong: el.hasAttribute('data-wrong') });
     }
 
-    var answer = root.querySelector('#answer-input');
-    if (answer && ui.view === 'game') answer.focus();
+    // Fokus: feltet med fejl, ellers første tomme felt, ellers første felt.
+    var fields = answerFields();
+    if (fields.length && ui.view === 'game') {
+      var fb = state.round && state.round.lastFeedback;
+      var target = (fb && fields[fb.field]) || fields.filter(function (f) { return !f.value; })[0] || fields[0];
+      target.focus();
+      if (target.value) target.select();
+    }
 
     if (ui.focusTeamForm) {
       ui.focusTeamForm = false;
@@ -56,9 +62,13 @@
     }
   }
 
+  function answerFields() {
+    return Array.prototype.slice.call(root.querySelectorAll('[data-form="answer"] input[name="answer"]'));
+  }
+
   function revealKey(state) {
     var r = state.round;
-    return [r.type, r.number, r.stage, r.attempt || 0, r.questionId, r.given.length].join(':');
+    return [r.type, r.number, r.stage, r.attempt || 0, r.questionId, r.given.length, r.revealIdx].join(':');
   }
 
   function startReveal(el, state) {
@@ -69,8 +79,8 @@
       return;
     }
     animatingKey = key;
-    var entry = state.round.pending;
-    JFM.countdown.runCountdown(el, entry.score, { wrong: entry.status === 'wrong' }).then(function () {
+    var entry = E.currentReveal(state).entry;
+    JFM.countdown.runCountdown(el, entry.score, { wrong: entry.status !== 'correct' }).then(function () {
       animatingKey = null;
       var s = store.getState();
       if (s.phase === 'REVEAL' && !s.round.revealDone && revealKey(s) === key) dispatch({ type: 'REVEAL_DONE' });
@@ -151,9 +161,6 @@
       if (ui.editId === id) ui.editId = null;
       dispatch({ type: 'REMOVE_TEAM', teamId: id });
     },
-    'choose-pass': function (el) {
-      dispatch({ type: 'CHOOSE_PASS_PLAYER', teamId: el.getAttribute('data-team'), playerIdx: Number(el.getAttribute('data-idx')) });
-    },
     'ready': function () { dispatch({ type: 'CONFIRM_READY' }); },
     'next': function () { dispatch({ type: 'NEXT' }); },
     'new-game': function () {
@@ -206,13 +213,11 @@
     dispatch({ type: editing ? 'EDIT_TEAM' : 'ADD_TEAM', team: team });
   }
 
-  function submitAnswer(form) {
+  // Afvises turen (tomt/tvetydigt/dublet), genrenderes skærmen med felterne udfyldt og fokus på fejlfeltet.
+  function submitAnswer() {
     var turn = E.currentTurn(store.getState());
-    var input = form.elements.answer;
-    dispatch({ type: 'SUBMIT_ANSWER', teamId: turn && turn.team.id, text: input.value });
-    // Står vi stadig på svarskærmen (tvetydigt/dublet), bevares fokus i feltet.
-    var again = root.querySelector('#answer-input');
-    if (again) again.focus();
+    var texts = answerFields().map(function (f) { return f.value; });
+    dispatch({ type: 'SUBMIT_ANSWER', teamId: turn && turn.team.id, texts: texts });
   }
 
   function onSubmit(event) {
@@ -221,7 +226,7 @@
     if (!kind) return;
     event.preventDefault();
     if (kind === 'team') submitTeam(form);
-    if (kind === 'answer') submitAnswer(form);
+    if (kind === 'answer') submitAnswer();
   }
 
   function onChange(event) {
@@ -229,8 +234,18 @@
     if (el.getAttribute('data-role') === 'import-file' && el.files && el.files[0]) importBackup(el.files[0]);
   }
 
+  // Enter i et svarfelt hopper til næste felt; Enter i sidste felt gemmer.
   // Piletaster flytter markeringen i startmenuen (retro-stil).
   function onKeyDown(event) {
+    if (event.key === 'Enter' && event.target.name === 'answer') {
+      var fields = answerFields();
+      var i = fields.indexOf(event.target);
+      if (i !== -1 && i < fields.length - 1) {
+        event.preventDefault();
+        fields[i + 1].focus();
+      }
+      return;
+    }
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
     var items = Array.prototype.slice.call(root.querySelectorAll('.menu .menu-item:not([disabled])'));
     if (!items.length) return;

@@ -1,4 +1,4 @@
-// Tests af game-engine.js. Simulerer et helt spil med 4 hold inkl. uafgjort, omspil og Head-to-Head.
+// Tests af game-engine.js. Simulerer et helt spil med 4 hold inkl. pas, uafgjort, omspil og Head-to-Head.
 (function () {
   'use strict';
   var T = window.JFM_TEST;
@@ -15,6 +15,7 @@
   }
   var bank = { questions: [makeQuestion('q1'), makeQuestion('q2'), makeQuestion('q3')] };
   var WRONG = 'wrong';
+  var PASS = 'pass';
 
   var seed = 1;
   function d(state, action) {
@@ -22,30 +23,41 @@
     return E.reduce(state, action, bank);
   }
 
-  // Finder et ubrugt svarnavn med den ønskede score i det aktuelle spørgsmål.
-  function textFor(state, score) {
-    if (score === WRONG) return 'zzzzzzzz';
+  // Finder ubrugte svarnavne med de ønskede scores i det aktuelle spørgsmål.
+  function textsFor(state, scores) {
     var used = state.round.given.map(function (g) { return g.matched; });
-    return used.indexOf('n' + score) === -1 ? 'n' + score : 'm' + score;
+    return scores.map(function (score) {
+      if (score === WRONG) return 'zzzzzzzz';
+      if (score === PASS) return 'pas';
+      var name = used.indexOf('n' + score) === -1 ? 'n' + score : 'm' + score;
+      T.assert(used.indexOf(name) === -1, 'testen mangler et ubrugt svar med score ' + score);
+      used.push(name);
+      return name;
+    });
   }
 
-  function playOne(state, score) {
+  // Spiller én tur: overlevering → svar → afslør hvert svar → videre.
+  function playTurn(state, scores) {
+    var list = Array.isArray(scores) ? scores : [scores];
     T.eq(state.phase, 'HANDOFF', 'før tur');
     state = d(state, { type: 'CONFIRM_READY' });
     T.eq(state.phase, 'ANSWERING');
-    state = d(state, { type: 'SUBMIT_ANSWER', text: textFor(state, score) });
-    T.eq(state.phase, 'REVEAL');
-    state = d(state, { type: 'REVEAL_DONE' });
-    return d(state, { type: 'NEXT' });
+    state = d(state, { type: 'SUBMIT_ANSWER', texts: textsFor(state, list) });
+    T.eq(state.phase, 'REVEAL', 'svar accepteret');
+    while (state.phase === 'REVEAL') {
+      state = d(state, { type: 'REVEAL_DONE' });
+      state = d(state, { type: 'NEXT' });
+    }
+    return state;
   }
 
-  // Spiller ture så længe der er overlevering; scoresByTeam = { teamId: [score, score, ...] }.
+  // Spiller ture så længe der er overlevering; scoresByTeam = { teamId: [tur1, tur2, ...] }.
   function playTurns(state, scoresByTeam) {
     while (state.phase === 'HANDOFF') {
       var teamId = E.currentTurn(state).team.id;
       var queue = scoresByTeam[teamId];
-      T.assert(queue && queue.length, 'mangler score til ' + teamId);
-      state = playOne(state, queue.shift());
+      T.assert(queue && queue.length, 'mangler svar til ' + teamId);
+      state = playTurn(state, queue.shift());
     }
     return state;
   }
@@ -62,13 +74,18 @@
     return s;
   }
 
+  // 3 hold, spillet frem til første overlevering i runde 1.
+  function firstHandoff() {
+    var s = setupTeams(3);
+    return d(d(d(s, { type: 'START_GAME' }), { type: 'NEXT' }), { type: 'NEXT' });
+  }
+
   function team(state, id) { return E.findTeam(state, id); }
 
   T.test('opsætning: tilføj, redigér og slet hold', function () {
     var s = setupTeams(2);
     T.eq(s.teams.length, 2);
-    T.eq(s.teams[0].passPlayerIdx, [0, 1]);
-    T.eq(s.teams[1].passPlayerIdx, [0, 0], '1-mandshold tager begge pas');
+    T.eq(s.teams[1].players, ['Ida']);
 
     var same = d(s, { type: 'ADD_TEAM', team: { id: 'x', name: 'hold 1', players: ['A'] } });
     T.assert(same === s, 'dubletnavn afvises og state er uændret');
@@ -110,112 +127,126 @@
     T.eq(s.phase, 'H2H_INTRO');
   });
 
-  T.test('svarskærm: tomt, tvetydigt og dublet afvises uden at tælle', function () {
-    var s = setupTeams(3);
-    s = d(s, { type: 'START_GAME' });
-    s = d(s, { type: 'NEXT' });
-    s = d(s, { type: 'NEXT' });
-    s = playOne(s, 10);                  // første hold svarer n10
-    s = d(s, { type: 'CONFIRM_READY' });
-
-    s = d(s, { type: 'SUBMIT_ANSWER', text: '  ' });
-    T.eq(s.phase, 'ANSWERING');
-    T.eq(s.round.lastFeedback.type, 'empty');
-
-    s = d(s, { type: 'SUBMIT_ANSWER', text: 'n10' });
-    T.eq(s.phase, 'ANSWERING');
-    T.eq(s.round.lastFeedback.type, 'duplicate');
-    T.eq(s.round.lastFeedback.message, 'Det svar er allerede brugt — prøv igen.');
-
-    s = d(s, { type: 'SUBMIT_ANSWER', text: 'zzzzzzzz' });
-    T.eq(s.phase, 'REVEAL');
-    T.eq(s.round.pending.score, 100, 'forkert = 100');
-    T.eq(s.round.pending.status, 'wrong');
+  T.test('eliminationsrunde: én tur pr. hold med 3 felter, holdet konfererer', function () {
+    var s = firstHandoff();
+    T.eq(s.round.turns.length, 3, 'én tur pr. hold');
+    var turn = E.currentTurn(s);
+    T.eq(turn.slots, E.ANSWERS_PER_TURN);
+    T.eq(turn.playerName, null);
+    T.eq(E.currentTurn(s).team.id, s.round.order[0]);
   });
 
-  T.test('score lægges til ved REVEAL_DONE (én gang)', function () {
-    var s = setupTeams(3);
-    s = d(d(d(s, { type: 'START_GAME' }), { type: 'NEXT' }), { type: 'NEXT' });
-    var id = E.currentTurn(s).team.id;
+  T.test('3 svar: forkert antal felter afvises', function () {
+    var s = d(firstHandoff(), { type: 'CONFIRM_READY' });
+    T.assert(d(s, { type: 'SUBMIT_ANSWER', texts: ['n1', 'n2'] }) === s, '2 felter');
+    T.assert(d(s, { type: 'SUBMIT_ANSWER', text: 'n1' }) === s, 'enkelt tekst');
+  });
+
+  T.test('3 svar: tomt felt, dublet i egne svar og tidligere brugt svar afviser hele turen', function () {
+    var s = d(firstHandoff(), { type: 'CONFIRM_READY' });
+
+    var r = d(s, { type: 'SUBMIT_ANSWER', texts: ['n1', '  ', 'n3'] });
+    T.eq(r.phase, 'ANSWERING');
+    T.eq(r.round.lastFeedback.type, 'empty');
+    T.eq(r.round.lastFeedback.field, 1);
+    T.eq(r.round.lastFeedback.message, 'Svar 2: Skriv et svar — eller “pas” for 100 point.');
+    T.eq(r.round.lastFeedback.inputs, ['n1', '', 'n3'], 'felterne bevares');
+    T.eq(r.round.given, [], 'intet er registreret');
+
+    r = d(s, { type: 'SUBMIT_ANSWER', texts: ['n10', 'n11', 'n10'] });
+    T.eq(r.round.lastFeedback.type, 'duplicate');
+    T.eq(r.round.lastFeedback.field, 2);
+    T.eq(r.round.lastFeedback.message, 'Svar 3: Det svar er allerede brugt — prøv igen.');
+
+    // Første hold svarer n10; andet hold må ikke bruge n10
+    s = d(s, { type: 'SUBMIT_ANSWER', texts: ['n10', 'n11', 'n12'] });
+    while (s.phase === 'REVEAL') s = d(d(s, { type: 'REVEAL_DONE' }), { type: 'NEXT' });
     s = d(s, { type: 'CONFIRM_READY' });
-    s = d(s, { type: 'SUBMIT_ANSWER', text: 'n42' });
+    r = d(s, { type: 'SUBMIT_ANSWER', texts: ['n20', 'n10', 'n21'] });
+    T.eq(r.round.lastFeedback.type, 'duplicate');
+    T.eq(r.round.lastFeedback.field, 1);
+  });
+
+  T.test('"pas" giver 100 point, uanset store/små bogstaver, og må bruges flere gange', function () {
+    var s = d(firstHandoff(), { type: 'CONFIRM_READY' });
+    s = d(s, { type: 'SUBMIT_ANSWER', texts: ['Pas', ' PAS ', 'n7'] });
+    T.eq(s.phase, 'REVEAL');
+    var entries = s.round.pending.entries;
+    T.eq(entries.map(function (e) { return e.status; }), ['pass', 'pass', 'correct']);
+    T.eq(entries.map(function (e) { return e.score; }), [100, 100, 7]);
+    T.eq(entries[0].matched, null);
+  });
+
+  T.test('svarene afsløres ét ad gangen, og point lægges til pr. svar', function () {
+    var s = d(firstHandoff(), { type: 'CONFIRM_READY' });
+    var id = E.currentTurn(s).team.id;
+    s = d(s, { type: 'SUBMIT_ANSWER', texts: ['n42', 'pas', 'n8'] });
     T.eq(team(s, id).roundScore, 0);
+    T.eq(E.currentReveal(s).index, 0);
+    T.eq(E.currentReveal(s).total, 3);
     T.assert(d(s, { type: 'NEXT' }) === s, 'NEXT kræver at reveal er færdig');
+
     s = d(s, { type: 'REVEAL_DONE' });
     T.eq(team(s, id).roundScore, 42);
     T.assert(d(s, { type: 'REVEAL_DONE' }) === s, 'REVEAL_DONE er idempotent');
+
+    s = d(s, { type: 'NEXT' });
+    T.eq(s.phase, 'REVEAL', 'stadig reveal — næste svar');
+    T.eq(E.currentReveal(s).index, 1);
+    T.eq(s.round.revealDone, false);
+    s = d(s, { type: 'REVEAL_DONE' });
+    T.eq(team(s, id).roundScore, 142);
+
+    s = d(d(s, { type: 'NEXT' }), { type: 'REVEAL_DONE' });
+    T.eq(team(s, id).roundScore, 150, 'summen af alle 3');
+    s = d(s, { type: 'NEXT' });
+    T.eq(s.phase, 'HANDOFF', 'videre til næste hold');
+    T.assert(E.currentTurn(s).team.id !== id);
   });
 
-  T.test('fuldt spil: 4 hold, uafgjort, omspil, nyt spørgsmål, H2H og vinder', function () {
+  T.test('fuldt spil: 4 hold, pas, uafgjort, omspil, nyt spørgsmål, H2H og vinder', function () {
     var s = setupTeams(4);
     s = d(s, { type: 'START_GAME' });
     s = d(s, { type: 'NEXT' });
     T.eq(s.phase, 'ROUND_INTRO');
     T.eq(s.round.number, 1);
     T.eq(s.round.order.slice().sort(), ['t1', 't2', 't3', 't4']);
-
-    // Hold 1 lader spiller 2 (Jonas) tage 1. pas
-    s = d(s, { type: 'CHOOSE_PASS_PLAYER', teamId: 't1', playerIdx: 1 });
-    T.eq(team(s, 't1').passPlayerIdx, [1, 0]);
     var order1 = s.round.order.slice();
 
     s = d(s, { type: 'NEXT' });
-    T.eq(s.phase, 'HANDOFF');
     T.eq(E.currentTurn(s).team.id, order1[0]);
 
-    // 1. pas
-    var firstPassPlayers = {};
-    while (s.round.stage === 'pass1') {
-      var turn = E.currentTurn(s);
-      firstPassPlayers[turn.team.id] = turn.playerName;
-      s = playOne(s, { t1: 10, t2: 30, t3: 50, t4: WRONG }[turn.team.id]);
-    }
-    T.eq(firstPassPlayers.t1, 'Jonas');
-    T.eq(firstPassPlayers.t2, 'Ida');
-
-    // 2. pas: omvendt rækkefølge, og den anden spiller
-    T.eq(s.round.stage, 'pass2');
-    T.eq(E.currentTurn(s).team.id, order1[3], '2. pas starter med sidste hold fra 1. pas');
-    var secondPassPlayers = {};
-    while (s.phase === 'HANDOFF') {
-      var turn2 = E.currentTurn(s);
-      secondPassPlayers[turn2.team.id] = turn2.playerName;
-      s = playOne(s, { t1: 10, t2: 40, t3: 20, t4: 0 }[turn2.team.id]);
-    }
-    T.eq(secondPassPlayers.t1, 'Emil');
-    T.eq(secondPassPlayers.t2, 'Ida', '1-mandshold tager begge pas');
-
-    // t1=20, t2=70, t3=70, t4=100 → t4 skal ud? Nej: t4 har 100 og er alene højest.
+    // Runde 1: t1=20, t2=70, t3=70, t4=100+100+0=200 → t4 alene højest
+    s = playTurns(s, { t1: [[10, 5, 5]], t2: [[30, 40, 0]], t3: [[50, 19, 1]], t4: [[WRONG, PASS, 0]] });
     T.eq(s.phase, 'ROUND_SUMMARY');
-    T.eq([team(s, 't1').roundScore, team(s, 't2').roundScore, team(s, 't3').roundScore, team(s, 't4').roundScore], [20, 70, 70, 100]);
+    T.eq([team(s, 't1').roundScore, team(s, 't2').roundScore, team(s, 't3').roundScore, team(s, 't4').roundScore], [20, 70, 70, 200]);
+    T.eq(s.round.roundGiven.length, 12, '4 hold × 3 svar');
     s = d(s, { type: 'NEXT' });
     T.eq(s.phase, 'ELIMINATION');
     T.eq(s.round.eliminatedId, 't4');
     T.assert(team(s, 't4').eliminated);
 
-    // Runde 2: stigende efter point i runde 1 (t1=20, t2=70, t3=70 → lige mellem t2/t3 afgøres af forrige rækkefølge)
+    // Runde 2: stigende efter point i runde 1 (t2/t3 lige → forrige rækkefølge)
     s = d(s, { type: 'NEXT' });
     T.eq(s.phase, 'ROUND_INTRO');
     T.eq(s.round.number, 2);
     T.eq(s.round.order[0], 't1');
     T.eq(s.round.order.slice(1), order1.filter(function (id) { return id === 't2' || id === 't3'; }));
     T.eq(team(s, 't1').roundScore, 0, 'point nulstilles mellem runder');
-    T.eq(team(s, 't1').passPlayerIdx, [0, 1], 'spillervalg nulstilles');
     var order2 = s.round.order.slice();
     var q2 = s.round.questionId;
 
     s = d(s, { type: 'NEXT' });
-    s = playTurns(s, { t1: [5, 5], t2: [30, 30], t3: [40, 20] });
-    // t1=10, t2=60, t3=60 → uafgjort mellem t2 og t3
-    T.eq(s.phase, 'ROUND_SUMMARY');
+    s = playTurns(s, { t1: [[1, 4, 5]], t2: [[30, 30, 0]], t3: [[40, 20, 0]] });
+    // t1=10, t2=60, t3=60 → uafgjort
     s = d(s, { type: 'NEXT' });
     T.eq(s.phase, 'TIEBREAK');
     T.eq(s.round.tiebreak.sameQuestion, true);
-    T.eq(s.round.tiebreak.teamIds, order2.filter(function (id) { return id !== 't1'; }), 'samme rækkefølge som 1. pas');
+    T.eq(s.round.tiebreak.teamIds, order2.filter(function (id) { return id !== 't1'; }), 'samme rækkefølge som runden');
 
-    // Omspil på samme spørgsmål: begge 15 → stadig lige
+    // Omspil: 1 svar pr. hold på samme spørgsmål. Begge 15 → stadig lige
     s = d(s, { type: 'NEXT' });
-    T.eq(s.phase, 'HANDOFF');
+    T.eq(E.currentTurn(s).slots, 1, 'omspil har ét felt');
     T.eq(E.currentTurn(s).playerName, null, 'holdet konfererer');
     s = playTurns(s, { t2: [15], t3: [15] });
     T.eq(s.phase, 'TIEBREAK');
@@ -223,9 +254,9 @@
     T.assert(s.round.questionId !== q2, 'nyt spørgsmål');
     T.eq(s.round.given, [], 'nyt spørgsmål har ingen givne svar');
 
-    // Nyt spørgsmål: t3 svarer forkert → t3 ud
+    // Nyt spørgsmål: t3 passer (100) → t3 ud
     s = d(s, { type: 'NEXT' });
-    s = playTurns(s, { t2: [5], t3: [WRONG] });
+    s = playTurns(s, { t2: [5], t3: [PASS] });
     T.eq(s.phase, 'ELIMINATION');
     T.eq(s.round.eliminatedId, 't3');
     T.eq(s.history.length, 2);
@@ -237,6 +268,7 @@
     T.eq(s.round.order, ['t1', 't2']);
     s = d(s, { type: 'NEXT' });
     T.eq(E.currentTurn(s).team.id, 't1');
+    T.eq(E.currentTurn(s).slots, 1, 'H2H har ét felt');
 
     // Spørgsmål 1: t1 10, t2 20 → t1 vinder
     s = playTurns(s, { t1: [10], t2: [20] });
@@ -258,9 +290,9 @@
     s = playTurns(s, { t2: [0], t1: [30] });
     T.eq(s.round.outcome.winnerId, 't2');
 
-    // Spørgsmål 3: t1 forkert, t2 50 → t2 vinder 2-1
+    // Spørgsmål 3: t1 passer, t2 50 → t2 vinder 2-1
     s = d(s, { type: 'NEXT' });
-    s = playTurns(s, { t1: [WRONG], t2: [50] });
+    s = playTurns(s, { t1: [PASS], t2: [50] });
     T.eq(team(s, 't2').h2hWins, 2);
     s = d(s, { type: 'NEXT' });
     T.eq(s.phase, 'WINNER');
@@ -277,9 +309,7 @@
   T.test('state er ren JSON og reduceren er deterministisk', function () {
     function playSome(startSeed) {
       seed = startSeed;
-      var s = setupTeams(4);
-      s = d(d(d(s, { type: 'START_GAME' }), { type: 'NEXT' }), { type: 'NEXT' });
-      return playOne(s, 7);
+      return playTurn(d(d(d(setupTeams(4), { type: 'START_GAME' }), { type: 'NEXT' }), { type: 'NEXT' }), [7, 8, PASS]);
     }
     var a = playSome(100);
     var b = playSome(100);
@@ -301,14 +331,16 @@
       s = E.reduce(s, { type: 'START_GAME' }, tiny);
       s = E.reduce(s, { type: 'NEXT', seed: 1 }, tiny);
       T.eq(warned, 0);
-      // Spil runden igennem med forkerte svar til ét hold, så det ryger ud
       s = E.reduce(s, { type: 'NEXT' }, tiny);
       while (s.phase === 'HANDOFF') {
         var id = E.currentTurn(s).team.id;
+        var n = s.round.given.length;
         s = E.reduce(s, { type: 'CONFIRM_READY' }, tiny);
-        s = E.reduce(s, { type: 'SUBMIT_ANSWER', text: id === 'a' ? 'zzzzzzzz' : 'n' + (s.round.given.length + 1) }, tiny);
-        s = E.reduce(s, { type: 'REVEAL_DONE' }, tiny);
-        s = E.reduce(s, { type: 'NEXT' }, tiny);
+        s = E.reduce(s, { type: 'SUBMIT_ANSWER', texts: id === 'a' ? ['pas', 'pas', 'pas'] : ['n' + (n + 1), 'n' + (n + 2), 'n' + (n + 3)] }, tiny);
+        while (s.phase === 'REVEAL') {
+          s = E.reduce(s, { type: 'REVEAL_DONE' }, tiny);
+          s = E.reduce(s, { type: 'NEXT' }, tiny);
+        }
       }
       s = E.reduce(s, { type: 'NEXT' }, tiny);            // → ELIMINATION
       s = E.reduce(s, { type: 'NEXT', seed: 2 }, tiny);   // → H2H_INTRO
@@ -325,6 +357,28 @@
     s.version = 99;
     T.assert(!E.isValidState(s));
     T.assert(!E.isValidState(null));
-    T.assert(!E.isValidState({ version: 1, phase: 'NOPE', teams: [] }));
+    T.assert(!E.isValidState({ version: 2, phase: 'NOPE', teams: [] }));
+  });
+
+  T.test('migrering: gemt spil fra v1 bliver til opsætning med de samme hold', function () {
+    var old = {
+      version: 1,
+      phase: 'ANSWERING',
+      teams: [
+        { id: 't1', name: 'Hold 1', players: ['Emil', 'Jonas'], roundScore: 40, eliminated: false, h2hWins: 0, passPlayerIdx: [1, 0] },
+        { id: 't2', name: 'Hold 2', players: ['Ida'], roundScore: 12, eliminated: true, h2hWins: 0, passPlayerIdx: [0, 0] }
+      ],
+      usedQuestionIds: ['q1'],
+      round: { stage: 'pass1' },
+      history: []
+    };
+    var s = E.migrateState(old);
+    T.eq(s.version, E.STATE_VERSION);
+    T.eq(s.phase, 'SETUP');
+    T.eq(s.teams.map(function (t) { return t.name; }), ['Hold 1', 'Hold 2']);
+    T.assert(s.teams.every(function (t) { return t.roundScore === 0 && !t.eliminated && !('passPlayerIdx' in t); }));
+    T.assert(E.isValidState(s));
+    var current = E.createInitialState();
+    T.assert(E.migrateState(current) === current, 'aktuel version røres ikke');
   });
 })();
