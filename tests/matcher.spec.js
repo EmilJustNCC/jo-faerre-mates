@@ -166,6 +166,34 @@
     T.eq(match(byId('natos-fonetiske-alfabet'), 'X-ray').answer, 'Xray');
   });
 
+  T.test('korte forkortelser skal matches præcist (SD ≠ SF)', function () {
+    var partier = byId('partier-paa-stemmesedlen');
+    T.eq(match(partier, 'SF').answer, 'Socialistisk Folkeparti');
+    T.eq(match(partier, 'DF').answer, 'Dansk Folkeparti');
+    T.eq(match(partier, 'SD').status, 'wrong');
+    T.eq(match(partier, 'Radikale').answer, 'Det Radikale Venstre');
+    T.eq(match(partier, 'Venstre').answer, 'Venstre');
+    T.eq(match(byId('disney-pixar-et-ord'), 'Op').answer, 'Op');
+    T.eq(match(byId('disney-pixar-et-ord'), 'Ok').status, 'wrong');
+  });
+
+  T.test('spørgsmål fra v1.3.0: aliasser og tvetydigheder', function () {
+    var bl = byId('bundesligaklubber');
+    T.eq(match(bl, 'Köln').answer, '1. FC Köln');
+    T.eq(match(bl, 'Leipzig').answer, 'RB Leipzig');
+    T.eq(match(bl, 'München').status, 'ambiguous', 'Bayern og 1860');
+    T.eq(match(bl, 'Berlin').status, 'ambiguous');
+    T.eq(match(byId('danskernes-favoritkomponister'), 'Tchaikovsky').answer, 'Pjotr Ilitj Tjajkovskij');
+    T.eq(match(byId('danskernes-favoritkomponister'), 'Mozart').answer, 'Wolfgang Amadeus Mozart');
+    T.eq(match(byId('danskernes-favoritkomponister'), 'Carl Orff').answer, 'Carl Orff');
+    T.eq(match(byId('ringenes-herre-karakterer'), 'Frodo Baggins').answer, 'Frodo');
+    T.eq(match(byId('drinks'), 'White Russian').answer, 'Black Russian/White Russian');
+    T.eq(match(byId('flyselskaber'), 'Air Baltic').answer, 'Air Baltic');
+    T.eq(match(byId('byer-tre-michelin-stjerner'), 'Rome').answer, 'Rom');
+    T.eq(match(byId('casper-christensen'), 'Klovn').answer, 'Klovn');
+    T.eq(match(byId('casper-christensen'), 'Klovn 2').status, 'wrong');
+  });
+
   T.test('nye spørgsmål: forkerte svar forbliver forkerte', function () {
     T.eq(match(byId('kattedyr'), 'Huskat').status, 'wrong');
     T.eq(match(byId('praesidenter-flere-perioder'), 'Joe Biden').status, 'wrong');

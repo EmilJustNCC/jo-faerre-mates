@@ -3,7 +3,7 @@
 En dansk fan-udgave af tv-quizzen *Jo Færre Jo Bedre* (Pointless) til vennegruppen.
 Hele spillet kører på én enhed. Den gives videre mellem holdene, og **færrest point vinder**.
 
-**Version:** 1.2.0, med 24 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
+**Version:** 1.3.0, med 43 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
 
 ## Sådan spiller I
 
@@ -74,7 +74,7 @@ git config core.hooksPath scripts/hooks
 
 ## Tilføj spørgsmål
 
-Kildelisten er `Spørgsmål.docx`. Den blev importeret i v1.1.0, og spørgsmålene ligger nu i `data/questions.js`. Nye spørgsmål tilføjes direkte i `window.JFM_QUESTIONS.questions`:
+Kildelisten er `Spørgsmål.docx`. Den blev importeret i v1.1.0 og v1.3.0, og spørgsmålene ligger nu i `data/questions.js`. Nye spørgsmål tilføjes direkte i `window.JFM_QUESTIONS.questions`:
 
 ```js
 {

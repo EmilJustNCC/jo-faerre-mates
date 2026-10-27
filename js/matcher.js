@@ -4,6 +4,8 @@
   'use strict';
 
   var MIN_PARTIAL_LENGTH = 3;
+  // Svar/aliasser kortere end dette skal matches præcist (forkortelser som "SF" og "DF" ligger kun 1 tegn fra hinanden).
+  var MIN_FUZZY_KEY_LENGTH = 4;
   var MIN_FUZZY_WORD_LENGTH = 4;
   // Ekstra ord, der må stå omkring et svar på ét ord ("Leeds United", "FC Barcelona").
   // Uden denne grænse ville fx "Tom Selleck" blive godkendt som svaret "Tom".
@@ -70,7 +72,8 @@
   function sameNumbers(a, b) { return numbersOf(a) === numbersOf(b); }
 
   function isFuzzyMatch(input, key) {
-    return sameNumbers(input, key) && levenshtein(input, key) <= maxDistance(key.length);
+    return key.length >= MIN_FUZZY_KEY_LENGTH && sameNumbers(input, key) &&
+      levenshtein(input, key) <= maxDistance(key.length);
   }
 
   // Findes ordene i `needle` som en sammenhængende ordfølge i `haystack`?

@@ -121,7 +121,8 @@ Engine kalder `matcher.js` ved `SUBMIT_ANSWER`. Tilfældighed (lodtrækning) mod
 ## Svar-matchning (`matcher.js`)
 1. **Normalisering:** små bogstaver, trim, fjern accenter (ş→s, ö→o, é→e), æ→ae, ø→oe, å→aa, fjern tegnsætning og bindestreger, saml mellemrum.
 2. **Eksakt match** mod navn eller et af svarets `aliases`.
-3. **Fuzzy match** med Levenshtein-afstand: ≤1 for ord på op til 5 tegn, ≤2 for 6–10 tegn, ≤3 for længere.
+3. **Fuzzy match** med Levenshtein-afstand: ≤1 for ord på op til 5 tegn, ≤2 for 6–10 tegn, ≤3 for længere. Tal skal være ens ("Toy Story 4" ≠ "Toy Story 3"). Svar/aliasser under 4 tegn (forkortelser som SF, DF) skal matches præcist.
+   - Derefter **ord-match**: input som hele ord i svaret ("Riis" → Bjarne Riis), svaret som hele ord i input når de øvrige ord er fyldord som FC/United/City ("Leeds United" → Leeds), og bøjningsformer ("Lund" → Lunds Universitet).
 4. **Tvetydighed:** hvis flere svar matcher lige godt (fx "Manchester"), afvises inputtet med "Vær mere præcis" — det tæller ikke som forkert.
 5. Intet match → forkert svar (100 point).
 6. Returnér altid `{ status: 'correct' | 'wrong' | 'ambiguous' | 'duplicate', answer, score }`.

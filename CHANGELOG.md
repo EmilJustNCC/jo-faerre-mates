@@ -5,6 +5,22 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 
 ## [Ikke udgivet]
 
+## [1.3.0] - 2026-10-27
+
+### Tilføjet
+- 19 nye spørgsmål fra den opdaterede `Spørgsmål.docx`, så der nu er 43 i alt: Casper Christensen, Disney- og Pixar-film i ét ord, danskere i La Liga, byer med tre Michelin-stjerner, danskernes favoritkomponister, flyselskaber, sprog i Duolingo, verdens rigeste, hovedstæder med M, partier på stemmesedlen, Batman og skurkene, asiatiske biler og motorcykler, Bundesligaklubber, drinks, danske øer, vindere af Tour de France, Ringenes Herre, 90'er-bandmedlemmer og Nikolaj Lie Kaas.
+- Aliasser til de nye spørgsmål, fx engelske Disney-titler, partiforkortelser (SF, DF, LA), engelske bynavne og komponistnavne.
+- Tests for de nye aliasser og tvetydigheder, fx "München" i Bundesliga og "SD" ≠ SF.
+
+### Ændret
+- Svar og aliasser under 4 tegn skal nu matches præcist. Ellers ville forkortelser som "SD" og "SF" matche hinanden.
+
+### Rettet
+- Tastefejl fra Word-filen: "Carf Orff" er rettet til Carl Orff, og "Ait Baltic" er rettet til Air Baltic.
+
+### Ikke importeret
+- "Kvinder med mindst fem Grammyer": Word-filen indeholder kun nulsvarene, ikke svarene med point.
+
 ## [1.2.0] - 2026-10-27
 
 ### Ændret
@@ -59,6 +75,7 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 - Backup-script (`scripts/backup.ps1`) med zip og git bundle samt en pre-commit-hook, der kører testene.
 
 [Ikke udgivet]: #
+[1.3.0]: #
 [1.2.0]: #
 [1.1.0]: #
 [1.0.0]: #
