@@ -3,7 +3,7 @@
 En dansk fan-udgave af tv-quizzen *Jo Færre Jo Bedre* (Pointless) til vennegruppen.
 Hele spillet kører på én enhed. Den gives videre mellem holdene, og **færrest point vinder**.
 
-**Version:** 2.0.0, med 44 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
+**Version:** 2.0.1, med 44 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
 
 ## Sådan spiller I
 
@@ -56,7 +56,7 @@ Projektet er beskyttet i fire lag:
 1. Lav ændringen.
 2. Kør `node scripts/run-tests.js`. Pre-commit-hooken gør det også automatisk.
 3. Commit med en beskrivende besked.
-4. Ved en ny version: opdatér `CHANGELOG.md` og `JFM.APP_VERSION` i `js/app.js`, lav et tag med `git tag -a vX.Y.Z -m "..."`, og kør backup-scriptet.
+4. Ved en ny version: opdatér `CHANGELOG.md`, `JFM.APP_VERSION` i `js/app.js` og **alle `?v=` i `index.html`** til det nye nummer. `?v=` tvinger browsere til at hente de nye filer i stedet for gamle fra cachen, og testene fejler, hvis tallene ikke passer sammen. Lav derefter et tag med `git tag -a vX.Y.Z -m "..."`, og kør backup-scriptet.
 
 Versionsnumre følger [SemVer](https://semver.org/lang/da/): MAJOR.MINOR.PATCH.
 

@@ -5,6 +5,12 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 
 ## [Ikke udgivet]
 
+## [2.0.1] - 2026-10-27
+
+### Rettet
+- Browsere kunne køre gamle, cachede filer efter en opdatering. GitHub Pages cacher filer i 10 minutter, så fx "Martini" stadig blev godkendt som Martinez, selvom rettelsen var online. Alle css- og js-filer hentes nu med versionsnummer (`?v=2.0.1`), så en ny version altid giver nye filer.
+- Ny test fejler, hvis `?v=` i `index.html` ikke matcher `APP_VERSION` i `js/app.js`.
+
 ## [2.0.0] - 2026-10-27
 
 ### Ændret — nyt spilforløb
@@ -88,6 +94,7 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 - Backup-script (`scripts/backup.ps1`) med zip og git bundle samt en pre-commit-hook, der kører testene.
 
 [Ikke udgivet]: #
+[2.0.1]: #
 [2.0.0]: #
 [1.3.0]: #
 [1.2.0]: #

@@ -2,7 +2,7 @@
 (function (JFM) {
   'use strict';
 
-  JFM.APP_VERSION = '2.0.0';
+  JFM.APP_VERSION = '2.0.1';   // skal matche ?v= i index.html
 
   var E = JFM.engine;
   var root;

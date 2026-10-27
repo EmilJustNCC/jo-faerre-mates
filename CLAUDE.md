@@ -18,7 +18,7 @@ enheden videre, og holdet indtaster selv sit svar. Hold scorer point efter, hvor
 - Ret kun det, der bliver bedt om. Omskriv ikke fungerende kode.
 - `game-engine.js` og `matcher.js` skal være rene funktioner uden DOM og uden storage, så de kan testes isoleret og genbruges, når Firebase kommer på.
 - Kør `node scripts/run-tests.js` før hver commit (pre-commit-hooken i `scripts/hooks/` gør det automatisk). Nye regler/bugfixes får en test i `tests/*.spec.js`.
-- Versionering: én commit pr. afsluttet ændring, `CHANGELOG.md` opdateres, og releases tagges `vX.Y.Z` (SemVer) med `JFM.APP_VERSION` i `js/app.js` sat til samme version. Kør `scripts/backup.ps1` efter en release.
+- Versionering: én commit pr. afsluttet ændring, `CHANGELOG.md` opdateres, og releases tagges `vX.Y.Z` (SemVer) med `JFM.APP_VERSION` i `js/app.js` **og alle `?v=` i `index.html`** sat til samme version (cache-busting — GitHub Pages cacher i 10 min; testen i `scripts/run-tests.js` fejler ved uoverensstemmelse). Kør `scripts/backup.ps1` efter en release.
 
 ## Tech stack
 - **Frontend:** Vanilla HTML/CSS/JS — én side, ingen framework nødvendig.

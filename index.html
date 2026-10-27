@@ -7,7 +7,9 @@
   <meta name="description" content="Jo Færre Mates jo Bedre — en dansk fan-udgave af Pointless til vennegruppen.">
   <title>Jo Færre Mates jo Bedre</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='20' y='4' width='24' height='56' rx='12' fill='%230b0f3a' stroke='%2367e8f9' stroke-width='4'/%3E%3Crect x='26' y='30' width='12' height='4' fill='%2367e8f9'/%3E%3Crect x='26' y='38' width='12' height='4' fill='%2367e8f9'/%3E%3Crect x='26' y='46' width='12' height='4' fill='%2367e8f9'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="css/style.css">
+  <!-- ?v= skal matche JFM.APP_VERSION i js/app.js. Nyt versionsnummer tvinger browsere til at hente nye filer
+       i stedet for gamle fra cachen (GitHub Pages cacher i 10 min). Tjekkes af scripts/run-tests.js. -->
+  <link rel="stylesheet" href="css/style.css?v=2.0.1">
 </head>
 <body>
   <main id="app">
@@ -15,12 +17,12 @@
   </main>
 
   <!-- Fast rækkefølge, ét globalt namespace (window.JFM). Ingen ES modules, så filen virker via file://. -->
-  <script src="data/questions.js"></script>
-  <script src="js/matcher.js"></script>
-  <script src="js/game-engine.js"></script>
-  <script src="js/store.js"></script>
-  <script src="js/countdown.js"></script>
-  <script src="js/screens.js"></script>
-  <script src="js/app.js"></script>
+  <script src="data/questions.js?v=2.0.1"></script>
+  <script src="js/matcher.js?v=2.0.1"></script>
+  <script src="js/game-engine.js?v=2.0.1"></script>
+  <script src="js/store.js?v=2.0.1"></script>
+  <script src="js/countdown.js?v=2.0.1"></script>
+  <script src="js/screens.js?v=2.0.1"></script>
+  <script src="js/app.js?v=2.0.1"></script>
 </body>
 </html>
