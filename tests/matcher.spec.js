@@ -102,6 +102,77 @@
     T.eq(match(aus, '   ').status, 'wrong');
   });
 
+  function byId(id) {
+    var q = qs.filter(function (x) { return x.id === id; })[0];
+    T.assert(q, 'spørgsmål findes ikke: ' + id);
+    return q;
+  }
+
+  T.test('alle svar og aliasser i alle spørgsmål matcher sig selv', function () {
+    var failures = [];
+    qs.forEach(function (q) {
+      q.answers.forEach(function (a) {
+        [a.name].concat(a.aliases).forEach(function (text) {
+          var r = M.matchAnswer(text, q, []);
+          if (r.status !== 'correct' || r.answer !== a.name) {
+            failures.push(q.id + ': "' + text + '" → ' + r.status + (r.answer ? ' (' + r.answer + ')' : ''));
+          }
+        });
+      });
+    });
+    T.eq(failures, []);
+  });
+
+  T.test('ord-match: svarets ord i input og omvendt', function () {
+    T.eq(match(cl, 'Leeds United').answer, 'Leeds');
+    T.eq(match(cl, 'FC Barcelona').answer, 'Barcelona');
+    var friends = byId('vennernes-kaerester');
+    T.eq(match(friends, 'Tom Selleck').status, 'wrong', 'skuespiller ≠ svaret "Tom"');
+    T.eq(match(friends, 'Paul Rudd').status, 'wrong');
+    T.eq(match(friends, 'Richard Burke').answer, 'Richard');
+    T.eq(match(byId('praesidenter-flere-perioder'), 'President Barack Obama').answer, 'Barack Obama');
+    T.eq(match(byId('tour-de-france-90erne'), 'Riis').answer, 'Bjarne Riis');
+    T.eq(match(byId('landsholdenes-klub-100'), 'Schmeichel').status, 'ambiguous');
+    T.eq(match(byId('grand-slam-kvinder'), 'Williams').status, 'ambiguous');
+    T.eq(match(byId('kattedyr'), 'Kat').status, 'ambiguous');
+  });
+
+  T.test('ord-match med bøjningsformer, men ikke løse stavefejl pr. ord', function () {
+    var uni = byId('universiteter-skandinavien');
+    T.eq(match(uni, 'Lund').answer, 'Lunds Universitet');
+    T.eq(match(uni, 'Stockholm').answer, 'Stockholms universitet');
+    T.eq(match(byId('danske-museer'), 'Naturhistorisk').answer, 'Statens Naturhistoriske Museum');
+    var imdb = byId('imdb-top-100');
+    T.eq(match(imdb, 'Tiger').status, 'wrong', 'Tiger ≠ Moderne tider');
+    T.eq(match(imdb, 'Emil').status, 'wrong', 'Emil ≠ Den grønne mil');
+    T.eq(match(byId('mange-maal-premier-league'), 'Kate').status, 'wrong', 'Kate ≠ Harry Kane');
+    T.eq(match(byId('harry-potter-besvaergelser'), 'Lauren').status, 'wrong');
+  });
+
+  T.test('tal skal passe: Toy Story 4 er ikke Toy Story 3', function () {
+    var imdb = byId('imdb-top-100');
+    T.eq(match(imdb, 'Toy Story').answer, 'Toy Story');
+    T.eq(match(imdb, 'Toy Story 3').answer, 'Toy Story 3');
+    T.eq(match(imdb, 'Toy Story 4').status, 'wrong');
+    T.eq(match(imdb, 'Godfather 2').answer, 'The Godfather 2. del');
+    T.eq(match(imdb, 'The Godfather').answer, 'Godfather');
+    T.eq(match(byId('breddeidraetten'), 'Motorsport').answer, 'Motorsport (2 hjul)');
+  });
+
+  T.test('specialtegn: ł, ś, ą og engelske stavemåder', function () {
+    T.eq(match(byId('tour-de-france-90erne'), 'Zenon Jaskula').answer, 'Zenon Jaskuła');
+    T.eq(match(byId('grand-slam-kvinder'), 'Iga Swiatek').answer, 'Iga Świątek');
+    T.eq(match(byId('natos-fonetiske-alfabet'), 'Alpha').answer, 'Alfa');
+    T.eq(match(byId('natos-fonetiske-alfabet'), 'X-ray').answer, 'Xray');
+  });
+
+  T.test('nye spørgsmål: forkerte svar forbliver forkerte', function () {
+    T.eq(match(byId('kattedyr'), 'Huskat').status, 'wrong');
+    T.eq(match(byId('praesidenter-flere-perioder'), 'Joe Biden').status, 'wrong');
+    T.eq(match(byId('koncerter-parken-boxen'), 'Simon & Garfunkel').status, 'wrong');
+    T.eq(match(byId('landsholdsspillere-hjulmand'), 'Peter Schmeichel').status, 'wrong');
+  });
+
   T.test('spørgsmålsdata: unikke id\'er, gyldige scores', function () {
     var ids = qs.map(function (q) { return q.id; });
     T.eq(ids.length, new Set(ids).size, 'unikke id');

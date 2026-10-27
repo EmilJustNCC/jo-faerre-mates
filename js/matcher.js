@@ -4,6 +4,10 @@
   'use strict';
 
   var MIN_PARTIAL_LENGTH = 3;
+  var MIN_FUZZY_WORD_LENGTH = 4;
+  // Ekstra ord, der må stå omkring et svar på ét ord ("Leeds United", "FC Barcelona").
+  // Uden denne grænse ville fx "Tom Selleck" blive godkendt som svaret "Tom".
+  var FILLER_WORDS = ['the', 'fc', 'afc', 'cf', 'ac', 'sc', 'fk', 'bk', 'united', 'city', 'town', 'club'];
 
   function normalize(text) {
     return String(text == null ? '' : text)
@@ -12,7 +16,11 @@
       .replace(/ø/g, 'oe')
       .replace(/å/g, 'aa')
       .replace(/ß/g, 'ss')
+      .replace(/œ/g, 'oe')
       .replace(/ı/g, 'i')
+      .replace(/ł/g, 'l')
+      .replace(/[đð]/g, 'd')
+      .replace(/þ/g, 'th')
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '')  // fjern accenter (ş→s, ö→o, é→e)
       .replace(/[^a-z0-9]+/g, ' ')       // tegnsætning og bindestreger → mellemrum
@@ -54,9 +62,39 @@
     return keys;
   }
 
-  // Input matcher hele ord i nøglen, fx "madrid" i "real madrid".
-  function containsWords(key, input) {
-    return (' ' + key + ' ').indexOf(' ' + input + ' ') !== -1;
+  // Tal skal være ens for at fuzzy-matche, så "Toy Story 4" ikke bliver til "Toy Story 3".
+  function numbersOf(text) {
+    return (text.match(/\d+/g) || []).map(Number).join(',');
+  }
+
+  function sameNumbers(a, b) { return numbersOf(a) === numbersOf(b); }
+
+  function isFuzzyMatch(input, key) {
+    return sameNumbers(input, key) && levenshtein(input, key) <= maxDistance(key.length);
+  }
+
+  // Findes ordene i `needle` som en sammenhængende ordfølge i `haystack`?
+  function containsSequence(haystack, needle, wordMatches) {
+    for (var i = 0; i + needle.length <= haystack.length; i++) {
+      var ok = true;
+      for (var j = 0; j < needle.length && ok; j++) ok = wordMatches(haystack[i + j], needle[j]);
+      if (ok) return true;
+    }
+    return false;
+  }
+
+  function sameWord(a, b) { return a === b; }
+
+  // Bøjningsformer: det ene ord er det andet plus højst to bogstaver ("Lund" ≈ "Lunds", "Glyptoteket" ≈ "Glyptotek").
+  // Bevidst ikke almindelige stavefejl pr. ord — det gav falske match som "Tiger" → "Moderne tider".
+  function similarWord(keyWord, inputWord) {
+    if (keyWord === inputWord) return true;
+    var shorter = keyWord.length < inputWord.length ? keyWord : inputWord;
+    var longer = shorter === keyWord ? inputWord : keyWord;
+    return shorter.length >= MIN_FUZZY_WORD_LENGTH &&
+      longer.length - shorter.length <= 2 &&
+      longer.indexOf(shorter) === 0 &&
+      sameNumbers(shorter, longer);
   }
 
   function uniqueAnswers(list) {
@@ -83,21 +121,44 @@
     indexed.forEach(function (x) {
       var d = Infinity;
       x.keys.forEach(function (key) {
+        if (!isFuzzyMatch(input, key)) return;
         var dist = levenshtein(input, key);
-        if (dist <= maxDistance(key.length) && dist < d) d = dist;
+        if (dist < d) d = dist;
       });
       if (d < best) { best = d; fuzzy = [x.answer]; }
       else if (d === best && d !== Infinity) fuzzy.push(x.answer);
     });
     if (fuzzy.length) return fuzzy;
 
-    // 3. Ord-match (fx "Madrid" → Real Madrid og Atlético Madrid = tvetydig)
-    if (input.length >= MIN_PARTIAL_LENGTH) {
+    if (input.length < MIN_PARTIAL_LENGTH) return [];
+    var inputWords = input.split(' ');
+
+    function matching(test) {
       return uniqueAnswers(indexed.filter(function (x) {
-        return x.keys.some(function (key) { return containsWords(key, input); });
+        return x.keys.some(function (key) { return test(key, key.split(' ')); });
       }).map(function (x) { return x.answer; }));
     }
-    return [];
+
+    // 3. Ord-match begge veje:
+    //    - input er hele ord i svaret: "Madrid" → Real Madrid + Atlético Madrid (= tvetydig), "Springsteen" → Bruce Springsteen …
+    //    - svaret er hele ord i input:  "Leeds United" → Leeds, "President Barack Obama" → Barack Obama
+    function onlyFillerAround(keyWords) {
+      return keyWords.length > 1 || inputWords.every(function (w) {
+        return w === keyWords[0] || FILLER_WORDS.indexOf(w) !== -1;
+      });
+    }
+    var partial = matching(function (key, keyWords) {
+      return containsSequence(keyWords, inputWords, sameWord) ||
+        (key.length >= MIN_PARTIAL_LENGTH && sameNumbers(input, key) &&
+          containsSequence(inputWords, keyWords, sameWord) && onlyFillerAround(keyWords));
+    });
+    if (partial.length) return partial;
+
+    // 4. Ord-match med bøjningsformer: "Lund" → Lunds Universitet, "Stockholm" → Stockholms universitet
+    if (input.length < MIN_FUZZY_WORD_LENGTH) return [];
+    return matching(function (key, keyWords) {
+      return containsSequence(keyWords, inputWords, similarWord);
+    });
   }
 
   /**

@@ -5,6 +5,24 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 
 ## [Ikke udgivet]
 
+## [1.1.0] - 2026-10-27
+
+### Tilføjet
+- 22 nye spørgsmål importeret fra `Spørgsmål.docx`, så der nu er 24 i alt. De har "Vi leder efter …"-instruktioner og aliasser, fx engelske filmtitler, forkortelser som KU og SMK og engelske besværgelser.
+- Ord-match i begge retninger: "Riis" → Bjarne Riis, "Leeds United" → Leeds og "President Barack Obama" → Barack Obama.
+- Bøjningsformer: "Lund" → Lunds Universitet og "Stockholm" → Stockholms universitet.
+- Normalisering af ł, đ/ð, œ og þ.
+- Test af, at hvert svar og alias i alle spørgsmål matcher sig selv, samt tests af de nye matchregler.
+
+### Ændret
+- Tal skal være ens ved fuzzy match: "Toy Story 4" godkendes ikke som Toy Story 3.
+- Et svar på ét ord kan kun matches inde i et længere input, hvis de øvrige ord er fyldord som FC, United eller City. "Tom Selleck" bliver dermed ikke godkendt som "Tom".
+
+### Rettet
+- Et dobbeltklik kunne springe en skærm over, fx forbi elimineringen. Klik i de første 400 ms efter et skærmskift ignoreres nu.
+- Rundeopsummeringen skrev "I fandt dem alle!" ved spørgsmål uden pointless-svar.
+- Titelfejl fra Word-filen: "ONCERTER" er rettet til "KONCERTER", og "LANDE MED END" er rettet til "LANDE MED EN".
+
 ## [1.0.0] - 2026-10-27
 
 ### Tilføjet
@@ -24,4 +42,5 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 - Backup-script (`scripts/backup.ps1`) med zip og git bundle samt en pre-commit-hook, der kører testene.
 
 [Ikke udgivet]: #
+[1.1.0]: #
 [1.0.0]: #

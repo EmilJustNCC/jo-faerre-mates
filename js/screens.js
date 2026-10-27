@@ -310,11 +310,12 @@
       return '<tr><th scope="row">' + h(teamName(state, id)) + '</th><td>' + answers + '</td><td class="num">' + E.findTeam(state, id).roundScore + '</td></tr>';
     }).join('');
 
+    var hasPointless = q.answers.some(function (a) { return a.score === 0; });
     var pointless = q.answers.filter(function (a) { return a.score === 0 && givenNames.indexOf(a.name) === -1; });
     var pointlessHtml = pointless.length ?
       pointless.slice(0, MAX_POINTLESS_SHOWN).map(function (a) { return '<li>' + h(a.name) + '</li>'; }).join('') +
       (pointless.length > MAX_POINTLESS_SHOWN ? '<li class="muted">… og ' + (pointless.length - MAX_POINTLESS_SHOWN) + ' flere</li>' : '') :
-      '<li class="muted">I fandt dem alle!</li>';
+      '<li class="muted">' + (hasPointless ? 'I fandt dem alle!' : 'Dette spørgsmål har ingen pointless-svar.') + '</li>';
 
     var top = q.answers.slice().sort(function (a, b) { return b.score - a.score; }).slice(0, TOP_ANSWERS_SHOWN)
       .map(function (a) { return '<li>' + h(a.name) + ' <b>' + a.score + '</b></li>'; }).join('');

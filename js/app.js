@@ -2,13 +2,16 @@
 (function (JFM) {
   'use strict';
 
-  JFM.APP_VERSION = '1.0.0';
+  JFM.APP_VERSION = '1.1.0';
 
   var E = JFM.engine;
   var root;
   var store;
   var lastPhase = null;
+  var lastPhaseChangeAt = 0;
   var animatingKey = null;
+  // Klik lige efter et skærmskift ignoreres, så et dobbeltklik ikke springer en skærm over.
+  var CLICK_GUARD_MS = 400;
   // Lokal UI-tilstand, som ikke er en del af spillet og derfor ikke gemmes.
   var ui = { view: 'menu', editId: null, notice: null, focusTeamForm: false };
 
@@ -30,6 +33,7 @@
     if (state.phase !== lastPhase) {
       window.scrollTo(0, 0);
       lastPhase = state.phase;
+      lastPhaseChangeAt = Date.now();
     }
     afterRender(state);
   }
@@ -175,6 +179,7 @@
     var handler = actions[el.getAttribute('data-action')];
     if (!handler) return;
     event.preventDefault();
+    if (Date.now() - lastPhaseChangeAt < CLICK_GUARD_MS) return;
     ui.notice = null;
     handler(el);
   }
