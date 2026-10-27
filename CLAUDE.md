@@ -17,6 +17,8 @@ enheden videre, og holdet indtaster selv sit svar. Hold scorer point efter, hvor
 - Ingen frameworks, intet build-step og ingen eksterne afhængigheder.
 - Ret kun det, der bliver bedt om. Omskriv ikke fungerende kode.
 - `game-engine.js` og `matcher.js` skal være rene funktioner uden DOM og uden storage, så de kan testes isoleret og genbruges, når Firebase kommer på.
+- Kør `node scripts/run-tests.js` før hver commit (pre-commit-hooken i `scripts/hooks/` gør det automatisk). Nye regler/bugfixes får en test i `tests/*.spec.js`.
+- Versionering: én commit pr. afsluttet ændring, `CHANGELOG.md` opdateres, og releases tagges `vX.Y.Z` (SemVer) med `JFM.APP_VERSION` i `js/app.js` sat til samme version. Kør `scripts/backup.ps1` efter en release.
 
 ## Tech stack
 - **Frontend:** Vanilla HTML/CSS/JS — én side, ingen framework nødvendig.
@@ -53,10 +55,24 @@ jo-faerre-mates/
 ├── data/
 │   └── questions.js
 ├── docs/reference/       # Brugerens referencebilleder af countdown og layout
-├── tests.html            # Åbn i browser: kører konsoltests af matcher og engine
+├── tests.html            # Åbn i browser: kører tests af matcher, engine og store
+├── countdown-test.html   # Countdown-søjlen isoleret (85, 39, 0, forkert)
+├── tests/                # runner.js + *.spec.js (deles af tests.html og Node)
+├── scripts/
+│   ├── run-tests.js      # node scripts/run-tests.js
+│   ├── backup.ps1        # Zip-snapshot + git bundle i backups/ (gitignored, OneDrive-synkroniseret)
+│   └── hooks/pre-commit  # Kører tests før commit (git config core.hooksPath scripts/hooks)
+├── CHANGELOG.md
 ├── README.md
 └── CLAUDE.md
 ```
+Projektet ligger direkte i mappen `Jo færre` (ikke i en undermappe `jo-faerre-mates/`).
+
+### Backup-lag
+1. **Git** — historik + tags pr. release.
+2. **Zip-snapshots** — `scripts/backup.ps1` (filer + `repo.bundle`), nyeste 15 beholdes.
+3. **Autogem** — `LocalStore` skriver `jfm-game-v1` og flytter forrige version til `jfm-game-v1-backup`. Ugyldigt hovedslot → gendannes fra backup. `reset()` gendannes ikke automatisk.
+4. **Backup-fil** — `exportState()`/`importState()` via startskærmens "Backup"-menu.
 Script-rækkefølge i `index.html`: `questions.js → matcher.js → game-engine.js → store.js → countdown.js → screens.js → app.js`.
 
 ## Brugerflow

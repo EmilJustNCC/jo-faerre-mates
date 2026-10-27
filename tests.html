@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JFMJB — Tests</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 24px; background: #0b0f3a; color: #f4f6ff; }
+    h1 { margin: 0 0 4px; }
+    .summary { font-weight: 700; margin: 8px 0 16px; }
+    .ok { color: #4ade80; }
+    .fail { color: #ff6b81; }
+    li { margin: 2px 0; }
+    .err { display: block; color: #ffb3c0; font-family: monospace; margin-left: 20px; }
+    a { color: #67e8f9; }
+  </style>
+</head>
+<body>
+  <h1>Tests: matcher, engine og store</h1>
+  <p>Kører de samme tests som <code>node scripts/run-tests.js</code>. Se også <a href="countdown-test.html">countdown-testsiden</a>.</p>
+  <p class="summary" id="summary">Kører…</p>
+  <ul id="results"></ul>
+
+  <script src="data/questions.js"></script>
+  <script src="js/matcher.js"></script>
+  <script src="js/game-engine.js"></script>
+  <script src="js/store.js"></script>
+  <script src="tests/runner.js"></script>
+  <script src="tests/matcher.spec.js"></script>
+  <script src="tests/engine.spec.js"></script>
+  <script src="tests/store.spec.js"></script>
+  <script>
+    (function () {
+      var summary = window.JFM_TEST.run();
+      var list = document.getElementById('results');
+      summary.results.forEach(function (r) {
+        var li = document.createElement('li');
+        li.className = r.ok ? 'ok' : 'fail';
+        li.textContent = (r.ok ? '✓ ' : '✗ ') + r.name;
+        if (!r.ok) {
+          var err = document.createElement('span');
+          err.className = 'err';
+          err.textContent = r.error;
+          li.appendChild(err);
+          console.error('✗ ' + r.name + ': ' + r.error);
+        }
+        list.appendChild(li);
+      });
+      var el = document.getElementById('summary');
+      el.textContent = summary.passed + ' bestået, ' + summary.failed + ' fejlet';
+      el.className = 'summary ' + (summary.failed ? 'fail' : 'ok');
+      console.log('JFMJB tests: ' + el.textContent);
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JFMJB — Countdown-test</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .lab { display: grid; grid-template-columns: 140px 1fr; gap: 24px; max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+    .lab .countdown-wrap { min-height: 480px; }
+    .controls { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+    #status { min-height: 1.5em; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="lab">
+    <div class="countdown-wrap"><div class="cd" id="cd"></div></div>
+    <div class="controls">
+      <h1>Countdown-test</h1>
+      <p class="muted">Afspiller søjlen isoleret. Varighed 2,5–4 sek. afhængigt af faldet.</p>
+      <div class="row">
+        <button class="btn btn-primary" data-score="85">85</button>
+        <button class="btn btn-primary" data-score="39">39</button>
+        <button class="btn btn-primary" data-score="0">0 (pointless)</button>
+        <button class="btn btn-ghost btn-danger" data-wrong="1">Forkert</button>
+        <button class="btn btn-ghost" data-reset="1">Nulstil (100)</button>
+      </div>
+      <p id="status"></p>
+      <p><a href="tests.html" style="color: var(--accent)">← Tilbage til tests</a></p>
+    </div>
+  </div>
+
+  <script src="js/countdown.js"></script>
+  <script>
+    (function () {
+      var el = document.getElementById('cd');
+      var status = document.getElementById('status');
+      var busy = false;
+      JFM.countdown.render(el, 100);
+
+      document.querySelector('.controls').addEventListener('click', function (e) {
+        var btn = e.target.closest('button');
+        if (!btn || busy) return;
+        if (btn.dataset.reset) { JFM.countdown.render(el, 100); status.textContent = ''; return; }
+        var wrong = !!btn.dataset.wrong;
+        var score = wrong ? 100 : Number(btn.dataset.score);
+        var started = performance.now();
+        busy = true;
+        status.textContent = 'Kører…';
+        JFM.countdown.runCountdown(el, score, { wrong: wrong }).then(function () {
+          busy = false;
+          status.textContent = 'Færdig efter ' + ((performance.now() - started) / 1000).toFixed(2) + ' sek.';
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

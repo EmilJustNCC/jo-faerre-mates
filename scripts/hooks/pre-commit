@@ -1,0 +1,15 @@
+#!/bin/sh
+# Kører testene før hver commit, så der aldrig gemmes en version med fejl i git.
+# Aktiveres én gang pr. klon med:  git config core.hooksPath scripts/hooks
+# Nødudgang (brug sjældent):        git commit --no-verify
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node ikke fundet — springer tests over."
+  exit 0
+fi
+
+if ! node scripts/run-tests.js >/dev/null 2>&1; then
+  echo "pre-commit: tests fejler — commit afbrudt."
+  echo "Kør 'node scripts/run-tests.js' for at se fejlene."
+  exit 1
+fi
