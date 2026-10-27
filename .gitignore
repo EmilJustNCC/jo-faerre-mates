@@ -1,6 +1,9 @@
 # Lokale zip-backups (scripts/backup.ps1) — ligger i OneDrive, men ikke i git
 backups/
 
+# Kildeliste til spørgsmål — kun lokalt (repoet er offentligt). Indholdet ligger i data/questions.js.
+Spørgsmål.docx
+
 # Office-låsefiler og midlertidige filer
 ~$*
 *.tmp

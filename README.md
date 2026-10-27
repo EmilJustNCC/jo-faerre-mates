@@ -91,4 +91,10 @@ Kør testene bagefter. De tjekker, at id'erne er unikke, at scorerne er gyldige,
 
 ## Hosting
 
-Spillet virker direkte fra filsystemet (`file://`). Det kan også lægges på GitHub Pages under `github.com/EmilJustNCC`. Det kræver ingen ændringer.
+**Spil online:** https://emiljustncc.github.io/jo-faerre-mates/
+
+Spillet hostes på GitHub Pages fra `main`-branchen. Siden opdateres automatisk et minut eller to efter hver `git push`. Filen `.nojekyll` får GitHub til at servere filerne, som de er.
+
+Spillet virker også direkte fra filsystemet (`file://`).
+
+Repoet er offentligt. `Spørgsmål.docx` ligger derfor kun lokalt og er sat i `.gitignore`.
