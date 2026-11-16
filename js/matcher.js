@@ -188,10 +188,23 @@
     return { status: 'correct', answer: answer.name, score: answer.score };
   }
 
+  // Anagrammer: stram matching, fordi bogstaverne er givet. Eksakt match mod svaret eller et alias,
+  // eller højst én tastefejl, når svaret/aliasset har mindst 8 tegn.
+  var ANAGRAM_FUZZY_MIN_LENGTH = 8;
+
+  function matchAnagram(text, item) {
+    var input = normalize(text);
+    if (!input || !item) return false;
+    return keysFor({ name: item.answer, aliases: item.aliases }).some(function (key) {
+      return key === input || (key.length >= ANAGRAM_FUZZY_MIN_LENGTH && levenshtein(input, key) <= 1);
+    });
+  }
+
   JFM.matcher = {
     normalize: normalize,
     levenshtein: levenshtein,
     maxDistance: maxDistance,
-    matchAnswer: matchAnswer
+    matchAnswer: matchAnswer,
+    matchAnagram: matchAnagram
   };
 })(window.JFM = window.JFM || {});

@@ -584,6 +584,169 @@ input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px 
   .confetti { display: none; }
 }
 
+/* ---------- Holdfarver (v3) ---------- */
+/* Hvert holdelement får --team (farven) og --team-ink (tekstfarve på farven) som inline-variabler. */
+
+.podium {
+  border-color: var(--team, #4b3bd8);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--team, #2a1a7a) 34%, #160f4d), #160f4d);
+}
+.podium.active {
+  border-color: var(--team, var(--gold));
+  border-width: 3px;
+  transform: translateY(-4px);
+  animation: team-glow 1.4s ease-in-out infinite;
+}
+.podium.inactive { opacity: 0.5; filter: saturate(0.7); }
+@keyframes team-glow {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--team) 45%, transparent), 0 0 18px color-mix(in srgb, var(--team) 55%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--team) 70%, transparent), 0 0 34px var(--team); }
+}
+.podium-star { font: 800 0.8rem var(--mono); color: var(--gold); letter-spacing: 0.04em; }
+
+.team-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--team);
+  vertical-align: baseline;
+  box-shadow: 0 0 6px var(--team);
+}
+.team-row { border-left: 6px solid var(--team, transparent); }
+.sb-row { border-left: 5px solid var(--team, transparent); }
+.order-row { border-left: 6px solid var(--team, transparent); }
+.intro-team { border-color: var(--team, var(--accent)); background: color-mix(in srgb, var(--team, #67e8f9) 22%, transparent); }
+
+/* Farvet bjælke øverst på svarskærmen */
+.team-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: calc(-1 * clamp(16px, 3vw, 32px)) calc(-1 * clamp(16px, 3vw, 32px)) 0;
+  padding: 12px 20px;
+  border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
+  background: var(--team);
+  color: var(--team-ink);
+}
+/* Bjælken sidder fast øverst; resten af panelet centreres under den */
+.game-panel:has(> .team-bar) { justify-content: flex-start; }
+.game-panel > .team-bar + * { margin-top: auto; }
+.game-panel:has(> .team-bar) > :last-child { margin-bottom: auto; }
+.team-bar-name { font: 900 clamp(1.2rem, 3vw, 1.6rem) var(--mono); text-transform: uppercase; letter-spacing: 0.04em; }
+.team-bar-sub { font-weight: 700; opacity: 0.9; }
+
+/* Overleveringsskærm i holdets farve */
+.handoff {
+  max-width: none;
+  background: var(--team);
+  color: var(--team-ink);
+}
+.handoff .handoff-kicker, .handoff .handoff-meta, .handoff .handoff-note { color: var(--team-ink); opacity: 0.85; font-weight: 700; }
+.handoff .handoff-team { color: var(--team-ink); text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.25); }
+.handoff .btn-ghost { color: var(--team-ink); border-color: color-mix(in srgb, var(--team-ink) 45%, transparent); }
+.handoff .btn-primary { background: #0b0f3a; color: #fff; box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35); }
+
+/* Reveal-panelet får en kant i holdets farve */
+.game-panel[data-team-panel] { border-color: var(--team); }
+
+/* Chips i holdets farve (svarlister og historik) */
+.chip-team {
+  border-color: var(--team);
+  background: color-mix(in srgb, var(--team) 22%, transparent);
+}
+.chip-team b { color: var(--text); }
+.chip-team.chip-wrong { border-style: dashed; background: color-mix(in srgb, var(--team) 10%, transparent); }
+.chip-team.chip-wrong b { color: var(--danger); }
+
+/* Svar fra tidligere spil: højst 3 linjer, ellers intern scroll */
+.history-box {
+  border: 1px dashed rgba(255, 255, 255, 0.25);
+  border-radius: 14px;
+  padding: 6px 12px 8px;
+}
+.history-box .small-heading { margin: 0 0 6px; }
+.history-chips { gap: 6px; max-height: calc(3 * 2.1em); overflow-y: auto; }
+.history-chips .chip { font-size: 0.85rem; padding: 2px 10px; line-height: 1.6; }
+
+.swap-btn { align-self: center; }
+
+/* Farvevælger i holddesigneren */
+.color-picker { border: none; padding: 0; margin: 0 0 8px; }
+.color-picker legend { font-weight: 600; font-size: 0.95rem; margin-bottom: 6px; padding: 0; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.swatch { position: relative; display: flex; align-items: center; gap: 6px; margin: 0; padding: 6px 12px 6px 8px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.15); cursor: pointer; font-weight: 700; }
+.swatch input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; min-height: 0; }
+.swatch-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--team); }
+.swatch:has(input:checked) { border-color: var(--team); background: color-mix(in srgb, var(--team) 25%, transparent); }
+.swatch:has(input:focus-visible) { outline: 3px solid var(--gold); outline-offset: 2px; }
+.swatch.taken { opacity: 0.3; cursor: not-allowed; text-decoration: line-through; }
+.max-teams { font-weight: 700; }
+
+/* Nulstil-dialog */
+.menu-item-danger { color: #ff9fb1; font-size: clamp(1rem, 2.2vw, 1.3rem); margin-top: 10px; }
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(5, 7, 30, 0.75);
+}
+.modal { max-width: 440px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 16px; }
+.btn-danger-fill { background: linear-gradient(180deg, #ff6b81, var(--danger)); color: #fff; box-shadow: 0 4px 0 #9f1239; }
+
+/* Rundeintro med kategori */
+.round-cat { display: block; font-size: 0.5em; color: var(--accent); text-shadow: 2px 2px 0 #3b1d8f; margin-top: 6px; }
+
+/* Anagram */
+.anagram-letters {
+  text-align: center;
+  font: 900 clamp(2rem, 7vw, 3.6rem) / 1.1 var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  text-shadow: 3px 3px 0 var(--pink);
+  word-break: break-word;
+}
+.timer { display: flex; align-items: center; gap: 12px; }
+.timer-bar { flex: 1; height: 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.timer-bar > span { display: block; height: 100%; width: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--gold)); }
+.timer-number { font: 900 2rem / 1 var(--mono); min-width: 2ch; text-align: right; color: var(--accent); }
+.timer.urgent .timer-bar > span { background: linear-gradient(90deg, var(--gold), var(--danger)); }
+.timer.urgent .timer-number { color: var(--danger); animation: arcade-blink 0.5s steps(1, end) infinite; }
+
+/* Sammenhæng: 12 brikker (4 kolonner × 3 rækker; 3 × 4 på telefon) */
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.tile {
+  min-height: 56px;
+  padding: 8px;
+  border-radius: 14px;
+  border: 2px solid var(--panel-border);
+  background: #0a0e33;
+  color: var(--text);
+  font: 800 1rem var(--sans);
+  cursor: pointer;
+  touch-action: manipulation;
+  hyphens: auto;           /* dansk orddeling (lang="da"): "Harmo-nika" i stedet for "Harmonik-a" */
+  overflow-wrap: break-word;
+}
+.tile:hover { border-color: var(--accent); }
+.tile.on { background: var(--gold); border-color: var(--gold); color: #1a1060; transform: translateY(-2px); }
+.tile-count { text-align: center; }
+.conn-words { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; padding: 0; margin: 0; }
+.conn-word { padding: 4px 12px; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.35); font-weight: 700; }
+.conn-word.hit { border-color: #4ade80; background: rgba(74, 222, 128, 0.15); }
+.conn-word.miss { border-color: var(--danger); background: rgba(255, 59, 92, 0.12); text-decoration: line-through; }
+
+.result-correct { color: #4ade80; }
+
+/* Countdown: ved ulige tal er den øverste stribe halvt tændt, så søjlen følger tallet trin for trin */
+.cd-stripe.half { opacity: 0.45; }
+
 /* ---------- Responsivt ---------- */
 
 @media (max-width: 860px) {
@@ -614,4 +777,23 @@ input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px 
   .sb-delta { display: none; }
   .topbar-brand { display: none; }
   .btn-big { width: 100%; max-width: 420px; }
+  .tiles { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .tile { min-height: 50px; font-size: 0.95rem; }
+  .team-bar { padding: 10px 14px; }
+
+  /* Reveal på telefon: søjle og resultat side om side og kompakte podier, så alt er synligt uden scroll */
+  .game-main.phase-reveal { grid-template-columns: 84px 1fr; gap: 10px; }
+  .phase-reveal .countdown-wrap { height: 260px; }
+  .phase-reveal .reveal-body { min-height: 0; }
+  .phase-reveal .result { font-size: 1.7rem; }
+  .phase-reveal .result-answer { font-size: 1.2rem; }
+  .phase-reveal ~ .podiums .podium-players,
+  .phase-reveal ~ .podiums .podium-extra { display: none; }
+  .phase-reveal ~ .podiums .podium { padding: 6px; }
+}
+
+@media (max-height: 760px) and (min-width: 721px) {
+  /* Lave skærme (fx 1280×720): lidt lavere søjle, så reveal ikke kræver scroll */
+  .countdown-wrap { min-height: 380px; }
+  .cd { min-height: 280px; }
 }

@@ -10,13 +10,18 @@ global.window = global;
 
 [
   'data/questions.js',
+  'data/anagrams.js',
+  'data/connections.js',
   'js/matcher.js',
   'js/game-engine.js',
   'js/store.js',
+  'js/countdown.js',
+  'js/timer.js',
   'tests/runner.js',
   'tests/matcher.spec.js',
   'tests/engine.spec.js',
-  'tests/store.spec.js'
+  'tests/store.spec.js',
+  'tests/categories.spec.js'
 ].forEach(function (file) {
   var full = path.join(root, file);
   vm.runInThisContext(fs.readFileSync(full, 'utf8'), { filename: full });
@@ -28,7 +33,7 @@ global.JFM_TEST.test('index.html: alle filer har ?v= lig APP_VERSION i app.js', 
   var html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   var refs = html.match(/(?:src|href)="(?:css|js|data)\/[^"]+"/g) || [];
   global.JFM_TEST.assert(appVersion, 'APP_VERSION ikke fundet i js/app.js');
-  global.JFM_TEST.eq(refs.length, 8, 'antal css/js-referencer');
+  global.JFM_TEST.eq(refs.length, 11, 'antal css/js-referencer');
   var wrong = refs.filter(function (r) { return r.indexOf('?v=' + appVersion + '"') === -1; });
   global.JFM_TEST.eq(wrong, [], 'referencer uden ?v=' + appVersion);
 });

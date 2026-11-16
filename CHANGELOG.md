@@ -5,6 +5,30 @@ Formatet følger [Keep a Changelog](https://keepachangelog.com/da/1.1.0/), og ve
 
 ## [Ikke udgivet]
 
+## [3.0.0] - 2026-11-16
+
+Rettelser fra `RETTELSER 16112026.md` (R1–R10).
+
+### Tilføjet
+- **To nye kategorier:** *Anagrammer* (30 stk. i `data/anagrams.js`) og *Sammenhæng* (12 opgaver i `data/connections.js`). Hver tur får sin egen opgave.
+  - Anagram: tema som hint, blandede bogstaver og en timer på 10 sekunder.
+  - Sammenhæng: 12 ordbrikker og en timer på 10 sekunder. Vælg de 4, der hører sammen.
+  - Begge er korrekt eller ikke korrekt: korrekt = 0 point, ikke korrekt eller for sent = 25 point. Der er ingen nedtælling ved resultatet. Efter en kort pause vises "KORREKT!" eller et rødt kryds.
+- **Rundeplan:** Runde 1–5 Jo Færre Jo Bedre, 6–7 Anagrammer, 8–12 Jo Færre Jo Bedre, 13–14 Sammenhæng og derefter Jo Færre Jo Bedre. Rundeintroen viser fx "RUNDE 6 — ANAGRAMMER".
+- **6 pointless-svar = automatisk sejr.** Tælleren `★ n/6` står på podiet. Kun 0-point-svar i Jo Færre Jo Bedre tæller.
+- **Holdfarver:** Rød, blå, grøn, gul og lilla, én pr. hold. Farven bruges på podier, holdkort, en farvet overleveringsskærm, holdbjælken på svarskærmen og svarchips. Det aktive hold gløder, og de andre nedtones.
+- **Historik på tværs af spil:** Gemmes i `jfm-session-v1`. Dukker et spørgsmål op, der er spillet før i sessionen, vises "Svar fra tidligere spil".
+- **Knappen "Spørgsmål gentaget"** i Jo Færre Jo Bedre (kun før rundens første svar).
+- **Knappen "Nulstil alle spil"** på startskærmen med bekræftelse. Den erstatter "Slet alt" i backup-menuen.
+
+### Ændret
+- **Én spiller pr. hold:** Hvert hold svarer én gang pr. runde, og rækkefølgen roterer én plads til højre (A,B,C,D → D,A,B,C). 2-mandshold spiller som før.
+- **Spørgsmål vælges tilfældigt** blandt de ubrugte i hele sessionen, ikke kun i det enkelte spil. Er en pulje brugt op, nulstilles den.
+- **Nedtællingen** (Jo Færre Jo Bedre) går ét point ad gangen og sætter farten ned tæt på 0: `delay(n) = 2 × (15 + 600 / (n + 2))` ms. Det er dobbelt så langsomt som i RETTELSER for mere spænding (100 → 0 tager ca. 7,5 sek.). Tempoet styres af `SLOWNESS` i `js/countdown.js`.
+- **Reveal-skærmen** viser kun søjlen, svaret med point, podierne og *Næste*. Der er ingen scroll ved 1280×720 og 390×844.
+- Højst 5 hold (før 6).
+- Gemte spil har nyt format (version 4). Spil fra v2 kan ikke fortsættes, men holdene bevares og får en farve.
+
 ## [2.0.1] - 2026-10-27
 
 ### Rettet

@@ -2,7 +2,7 @@
 (function (JFM) {
   'use strict';
 
-  JFM.APP_VERSION = '2.0.1';   // skal matche ?v= i index.html
+  JFM.APP_VERSION = '3.0.0';   // skal matche ?v= i index.html
 
   var E = JFM.engine;
   var root;
@@ -10,14 +10,17 @@
   var lastPhase = null;
   var lastPhaseChangeAt = 0;
   var animatingKey = null;
+  var stopTimer = null;
+  var picksKey = null;
   // Klik lige efter et skærmskift ignoreres, så et dobbeltklik ikke springer en skærm over.
   var CLICK_GUARD_MS = 400;
   // Lokal UI-tilstand, som ikke er en del af spillet og derfor ikke gemmes.
-  var ui = { view: 'menu', editId: null, notice: null, focusTeamForm: false };
+  var ui = { view: 'menu', editId: null, notice: null, focusTeamForm: false, confirmReset: false, picks: [] };
 
-  // Tilfældighed lægges på actionen, så engine forbliver deterministisk.
+  // Tilfældighed og tid lægges på actionen, så engine forbliver deterministisk.
   function dispatch(action) {
     action.seed = Math.floor(Math.random() * 4294967296);
+    action.now = Date.now();
     return store.dispatch(action);
   }
 
@@ -27,8 +30,17 @@
 
   // ---------- Rendering ----------
 
+  // Nøgle for den aktuelle tur. Skifter den, nulstilles de valgte brikker i Sammenhæng.
+  function turnKey(state) {
+    var r = state.round;
+    return state.phase === 'ANSWERING' && r ? [state.gameNumber, r.number, r.turnIdx].join(':') : null;
+  }
+
   function render() {
     var state = store.getState();
+    var key = turnKey(state);
+    if (key !== picksKey) { picksKey = key; ui.picks = []; }
+    if (stopTimer) { stopTimer(); stopTimer = null; }
     root.innerHTML = JFM.screens.render(state, ui);
     if (state.phase !== lastPhase) {
       window.scrollTo(0, 0);
@@ -43,7 +55,29 @@
     for (var i = 0; i < cds.length; i++) {
       var el = cds[i];
       if (el.hasAttribute('data-animate')) startReveal(el, state);
-      else JFM.countdown.render(el, Number(el.getAttribute('data-value')), { wrong: el.hasAttribute('data-wrong') });
+      else JFM.countdown.render(el, Number(el.getAttribute('data-value')), {
+        wrong: el.hasAttribute('data-wrong'),
+        zeroLabel: el.getAttribute('data-zero-label') || undefined
+      });
+    }
+
+    // Timer (Anagrammer og Sammenhæng): ved 0 låses felt/brikker, og svaret registreres som tidsoverskridelse.
+    var timerEl = root.querySelector('[data-timer]');
+    var seconds = state.round && E.TIMER_SECONDS[state.round.category];
+    if (timerEl && seconds && state.phase === 'ANSWERING' && state.round.deadline) {
+      stopTimer = JFM.timer.start(timerEl, state.round.deadline, seconds * 1000, function () {
+        var fields = answerFields();
+        var locked = root.querySelectorAll('.tile, [data-action="submit-tiles"], [data-form="answer"] button');
+        fields.forEach(function (f) { f.disabled = true; });
+        Array.prototype.forEach.call(locked, function (b) { b.disabled = true; });
+        var s = store.getState();
+        var turn = E.currentTurn(s);
+        if (s.phase !== 'ANSWERING' || turnKey(s) !== turnKey(state)) return;
+        var action = { type: 'SUBMIT_ANSWER', teamId: turn.team.id, timeout: true };
+        if (s.round.category === 'connections') action.picks = ui.picks.slice();
+        else action.texts = fields.map(function (f) { return f.value; });
+        dispatch(action);
+      });
     }
 
     // Fokus: feltet med fejl, ellers første tomme felt, ellers første felt.
@@ -80,7 +114,7 @@
     }
     animatingKey = key;
     var entry = E.currentReveal(state).entry;
-    JFM.countdown.runCountdown(el, entry.score, { wrong: entry.status !== 'correct' }).then(function () {
+    JFM.countdown.runCountdown(el, entry.score, JFM.screens.countdownOpts(state, entry)).then(function () {
       animatingKey = null;
       var s = store.getState();
       if (s.phase === 'REVEAL' && !s.round.revealDone && revealKey(s) === key) dispatch({ type: 'REVEAL_DONE' });
@@ -163,6 +197,19 @@
     },
     'ready': function () { dispatch({ type: 'CONFIRM_READY' }); },
     'next': function () { dispatch({ type: 'NEXT' }); },
+    'swap-question': function () { dispatch({ type: 'SWAP_QUESTION' }); },
+    'toggle-tile': function (el) {
+      var word = el.getAttribute('data-word');
+      var i = ui.picks.indexOf(word);
+      if (i !== -1) ui.picks.splice(i, 1);
+      else if (ui.picks.length < E.CONNECTION_PICKS) ui.picks.push(word);
+      render();
+    },
+    'submit-tiles': function () {
+      var turn = E.currentTurn(store.getState());
+      if (ui.picks.length !== E.CONNECTION_PICKS) return;
+      dispatch({ type: 'SUBMIT_ANSWER', teamId: turn && turn.team.id, picks: ui.picks.slice() });
+    },
     'new-game': function () {
       ui.view = 'menu';
       dispatch({ type: 'NEW_GAME' });
@@ -172,11 +219,24 @@
       var input = root.querySelector('[data-role="import-file"]');
       if (input) input.click();
     },
+    // "Nulstil alle spil": kræver bekræftelse i en dialog med "Ja, nulstil" / "Annullér".
     'reset-all': function () {
-      if (!window.confirm('Slet alle hold og det igangværende spil? (Den forrige version ligger stadig i backup-slottet.)')) return;
+      ui.confirmReset = true;
+      render();
+      var yes = root.querySelector('[data-action="reset-confirm"]');
+      if (yes) yes.focus();
+    },
+    'reset-cancel': function () {
+      ui.confirmReset = false;
+      render();
+    },
+    'reset-confirm': function () {
+      ui.confirmReset = false;
       ui.editId = null;
       ui.view = 'menu';
       store.reset();
+      ui.notice = 'Alle spil er nulstillet.';
+      render();
     }
   };
 
@@ -199,10 +259,12 @@
     var team = {
       id: editing || newTeamId(),
       name: form.elements.name.value,
-      players: [form.elements.p1.value, form.elements.p2.value]
+      players: [form.elements.p1.value, form.elements.p2.value],
+      color: form.elements.color ? form.elements.color.value || null : null
     };
     var error = E.validateTeam(state.teams, team, editing);
-    if (!error && !editing && state.teams.length >= E.MAX_TEAMS) error = 'Der kan højst være ' + E.MAX_TEAMS + ' hold.';
+    if (!error && !editing && state.teams.length >= E.MAX_TEAMS) error = 'Maks ' + E.MAX_TEAMS + ' hold.';
+    if (!error && !team.color) error = 'Vælg en farve.';
     if (error) {
       var box = form.querySelector('[data-role="form-error"]');
       if (box) box.textContent = error;
@@ -237,6 +299,11 @@
   // Enter i et svarfelt hopper til næste felt; Enter i sidste felt gemmer.
   // Piletaster flytter markeringen i startmenuen (retro-stil).
   function onKeyDown(event) {
+    if (event.key === 'Escape' && ui.confirmReset) {
+      ui.confirmReset = false;
+      render();
+      return;
+    }
     if (event.key === 'Enter' && event.target.name === 'answer') {
       var fields = answerFields();
       var i = fields.indexOf(event.target);
@@ -264,7 +331,7 @@
       root.innerHTML = '<p class="fatal">Spørgsmålene kunne ikke indlæses (data/questions.js).</p>';
       return;
     }
-    store = JFM.createLocalStore({ engine: E, questions: window.JFM_QUESTIONS });
+    store = JFM.createLocalStore({ engine: E, questions: JFM.screens.bank() });
     if (store.restoredFrom() === 'backup') {
       ui.notice = 'Det gemte spil var beskadiget og er gendannet fra backup.';
     }
@@ -279,8 +346,10 @@
     document.addEventListener('keydown', onKeyDown);
     render();
 
-    // Til fejlsøgning i konsollen.
+    // Til fejlsøgning i konsollen. JFM.forceQuestion('id') tvinger et bestemt spørgsmål frem
+    // (kun før rundens første svar) — bruges til at teste "Svar fra tidligere spil".
     JFM.store = store;
+    JFM.forceQuestion = function (questionId) { return dispatch({ type: 'SWAP_QUESTION', questionId: questionId }); };
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

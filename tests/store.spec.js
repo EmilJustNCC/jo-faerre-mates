@@ -114,6 +114,52 @@
     T.assert(typeof other.importState('{"format":"jfm-backup","state":{"version":99}}') === 'string');
   });
 
+  // Spiller én tur i et nyt spil, så sessionen får et svar i historikken.
+  function playOneAnswer(store) {
+    store.dispatch({ type: 'START_GAME', seed: 1 });
+    store.dispatch({ type: 'NEXT', seed: 2 });
+    store.dispatch({ type: 'NEXT', seed: 3 });
+    store.dispatch({ type: 'CONFIRM_READY', seed: 4 });
+    store.dispatch({ type: 'SUBMIT_ANSWER', texts: ['pas'], seed: 5 });
+    store.dispatch({ type: 'REVEAL_DONE', seed: 6 });
+  }
+
+  T.test('store: sessionen gemmes i sin egen nøgle (jfm-session-v1) og overlever genindlæsning', function () {
+    var storage = fakeStorage();
+    var store = makeStore(storage);
+    addTeam(store, 'a');
+    addTeam(store, 'b');
+    playOneAnswer(store);
+    var qid = store.getState().round.questionId;
+    T.assert(storage.data['jfm-session-v1'], 'sessionsnøglen findes');
+    T.assert(!('session' in JSON.parse(storage.data[KEY])), 'spillet gemmes uden sessionen');
+    var session = JSON.parse(storage.data['jfm-session-v1']);
+    T.eq(session.gamesPlayed, 1);
+    T.eq(session.answersByItem[qid].length, 1);
+    var reloaded = makeStore(storage);
+    T.eq(reloaded.getState().session, store.getState().session);
+  });
+
+  T.test('store: "Nyt spil" beholder sessionen, "Nulstil alle spil" sletter den — også efter genindlæsning', function () {
+    var storage = fakeStorage();
+    var store = makeStore(storage);
+    addTeam(store, 'a');
+    addTeam(store, 'b');
+    playOneAnswer(store);
+    store.dispatch({ type: 'NEW_GAME' });
+    T.eq(store.getState().teams.length, 2);
+    T.eq(store.getState().session.gamesPlayed, 1);
+    T.eq(makeStore(storage).getState().session.gamesPlayed, 1, 'efter genindlæsning');
+
+    store.reset();
+    T.eq(store.getState().teams, []);
+    T.eq(store.getState().session.gamesPlayed, 0);
+    T.assert(!storage.data['jfm-session-v1'], 'sessionsnøglen er slettet');
+    var reloaded = makeStore(storage);
+    T.eq(reloaded.getState().teams, [], 'tom startskærm efter genindlæsning');
+    T.eq(reloaded.getState().session.answersByItem, {});
+  });
+
   T.test('store: virker selvom storage kaster fejl', function () {
     var broken = {
       getItem: function () { throw new Error('blokeret'); },

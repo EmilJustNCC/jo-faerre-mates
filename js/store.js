@@ -4,6 +4,8 @@
 // Backup i LocalStore:
 //   - Hovedslot   `jfm-game-v1`         : seneste state.
 //   - Backupslot  `jfm-game-v1-backup`  : forrige gemte state (rullende, én version tilbage).
+//   - Sessionsslot `jfm-session-v1`     : state.session (brugte spørgsmål og svar fra tidligere spil).
+//     Gemmes adskilt fra det igangværende spil, så den overlever "Nyt spil" og først slettes ved reset().
 //   Er hovedslottet korrupt eller ugyldigt ved opstart, gendannes fra backupslottet.
 //   Ældre versioner migreres via engine.migrateState (holdene bevares); ukendt `version` ignoreres, jf. CLAUDE.md.
 //   exportState()/importState() giver en manuel backup som JSON-fil.
@@ -11,6 +13,7 @@
   'use strict';
 
   var DEFAULT_KEY = 'jfm-game-v1';
+  var DEFAULT_SESSION_KEY = 'jfm-session-v1';
   var EXPORT_FORMAT = 'jfm-backup';
 
   // localStorage kan kaste (privat tilstand, fuld kvote, blokeret). Alle kald går gennem dette lag.
@@ -41,6 +44,7 @@
     var bank = opts.questions;
     var key = opts.storageKey || DEFAULT_KEY;
     var backupKey = key + '-backup';
+    var sessionKey = opts.sessionKey || DEFAULT_SESSION_KEY;
     var storage = createSafeStorage(opts.storage !== undefined ? opts.storage : defaultStorage());
     var listeners = [];
     var restoredFrom = 'none';
@@ -55,27 +59,47 @@
       }
     }
 
+    function parseSession(raw) {
+      if (!raw) return null;
+      try {
+        var parsed = JSON.parse(raw);
+        return engine.isValidSession(parsed) ? parsed : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Sessionen ligger i sit eget slot; spillet i hovedslottet gemmes uden den.
+    function withSession(game) {
+      var session = parseSession(storage.get(sessionKey));
+      if (session) game.session = session;
+      return game;
+    }
+
     function load() {
       var mainRaw = storage.get(key);
       var main = parse(mainRaw);
-      if (main) { restoredFrom = 'main'; return main; }
+      if (main) { restoredFrom = 'main'; return withSession(main); }
       // Backup bruges kun, når hovedslottet findes men er ødelagt — ikke efter en bevidst nulstilling.
       if (mainRaw) {
         var backup = parse(storage.get(backupKey));
         if (backup) {
           console.warn('JFM: Gemt spil var ugyldigt — gendannet fra backup.');
           restoredFrom = 'backup';
-          return backup;
+          return withSession(backup);
         }
       }
       restoredFrom = 'none';
-      return engine.createInitialState();
+      return withSession(engine.createInitialState());
     }
 
     function persist(next) {
       var previousRaw = storage.get(key);
       if (previousRaw && parse(previousRaw)) storage.set(backupKey, previousRaw);
-      storage.set(key, JSON.stringify(next));
+      var game = {};
+      Object.keys(next).forEach(function (k) { if (k !== 'session') game[k] = next[k]; });
+      storage.set(key, JSON.stringify(game));
+      storage.set(sessionKey, JSON.stringify(next.session));
     }
 
     var state = load();
@@ -109,11 +133,13 @@
         };
       },
 
-      // Sletter alt (også hold). Det gamle spil ligger stadig i backupslottet.
+      // "Nulstil alle spil": sletter spillet, holdene og sessionen (historik og brugte spørgsmål).
+      // Det gamle spil ligger stadig i backupslottet, men gendannes ikke automatisk.
       reset: function () {
         var previousRaw = storage.get(key);
         if (previousRaw && parse(previousRaw)) storage.set(backupKey, previousRaw);
         storage.remove(key);
+        storage.remove(sessionKey);
         state = engine.createInitialState();
         notify({ type: '@@RESET' });
         return state;

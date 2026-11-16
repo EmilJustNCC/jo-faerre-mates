@@ -101,11 +101,11 @@
     T.eq(E.validateTeam([], { name: 'X', players: ['A', ' '] }), null, 'tomt spillerfelt ignoreres');
   });
 
-  T.test('højst 6 hold, mindst 2 for at starte', function () {
+  T.test('højst 5 hold (én farve pr. hold), mindst 2 for at starte', function () {
     var s = E.createInitialState();
     T.assert(d(s, { type: 'START_GAME' }) === s, 'kan ikke starte uden hold');
     for (var i = 1; i <= 7; i++) s = d(s, { type: 'ADD_TEAM', team: { id: 'h' + i, name: 'H' + i, players: ['P'] } });
-    T.eq(s.teams.length, 6);
+    T.eq(s.teams.length, 5);
   });
 
   T.test('ugyldige actions returnerer samme state-objekt', function () {
@@ -200,9 +200,9 @@
         if (s.round.order[0] === 't1') break;
       }
       T.eq(s.round.order[0], 't1');
-      // t1 passer alt (200 pr. spørgsmål), t2 svarer 0 → efter 5 spørgsmål har t1 1000
+      // t1 passer alt (200 pr. spørgsmål), t2 svarer 1 (ikke 0 — 6 pointless-svar ville vinde spillet) → efter 5 spørgsmål har t1 1000
       for (var q = 1; q <= 4; q++) {
-        s = d(playQuestion(s, { t1: [PASS, PASS], t2: [0, 0] }), { type: 'NEXT' });
+        s = d(playQuestion(s, { t1: [PASS, PASS], t2: [1, 1] }), { type: 'NEXT' });
         T.eq(s.phase, 'ROUND_INTRO', 'spørgsmål ' + q + ': spillet fortsætter');
       }
       T.eq(team(s, 't1').totalScore, 800);
@@ -210,11 +210,11 @@
       // Spil til t1 har 1000, men t2 har stadig en tur tilbage
       var guard = 0;
       while (team(s, 't1').totalScore < 1000 && guard++ < 10) {
-        s = playTurn(s, E.currentTurn(s).team.id === 't1' ? PASS : 0);
+        s = playTurn(s, E.currentTurn(s).team.id === 't1' ? PASS : 1);
       }
       T.eq(team(s, 't1').totalScore, 1000);
       T.eq(s.phase, 'HANDOFF', 'spørgsmålet spilles færdigt');
-      while (s.phase === 'HANDOFF') s = playTurn(s, E.currentTurn(s).team.id === 't1' ? PASS : 0);
+      while (s.phase === 'HANDOFF') s = playTurn(s, E.currentTurn(s).team.id === 't1' ? PASS : 1);
       T.eq(s.phase, 'ROUND_SUMMARY');
       s = d(s, { type: 'NEXT' });
       T.eq(s.phase, 'GAME_OVER');
@@ -229,7 +229,7 @@
     quietly(function () {
       var s = started(3);
       for (var q = 0; q < 5; q++) {
-        s = playQuestion(s, { t1: [PASS, PASS], t2: [PASS, PASS], t3: [0, 0] });
+        s = playQuestion(s, { t1: [PASS, PASS], t2: [PASS, PASS], t3: [1, 1] });
         s = d(s, { type: 'NEXT' });
       }
       T.eq(s.phase, 'GAME_OVER');
@@ -258,10 +258,10 @@
     T.assert(E.isValidState(a));
   });
 
-  T.test('spørgsmål genbruges med console.warn, når banken er tom', function () {
+  T.test('spørgsmål genbruges med console.info, når puljen er brugt', function () {
     var warned = 0;
-    var original = console.warn;
-    console.warn = function () { warned++; };
+    var original = console.info;
+    console.info = function () { warned++; };
     try {
       var tiny = { questions: [bank.questions[0]] };
       var s = E.createInitialState();
@@ -280,7 +280,7 @@
       T.eq(s.phase, 'ROUND_INTRO');
       T.assert(warned >= 1, 'advarsel ved genbrug');
     } finally {
-      console.warn = original;
+      console.info = original;
     }
   });
 
@@ -292,8 +292,8 @@
     T.assert(!E.isValidState({ version: E.STATE_VERSION, phase: 'NOPE', teams: [] }));
   });
 
-  T.test('migrering: gemte spil fra v1 og v2 bliver til opsætning med de samme hold', function () {
-    [1, 2].forEach(function (v) {
+  T.test('migrering: gemte spil fra v1, v2 og v3 bliver til opsætning med de samme hold', function () {
+    [1, 2, 3].forEach(function (v) {
       var old = {
         version: v,
         phase: 'ANSWERING',

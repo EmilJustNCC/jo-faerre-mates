@@ -1,18 +1,24 @@
 # Jo Færre Mates jo Bedre
 
 En dansk fan-udgave af tv-quizzen *Jo Færre Jo Bedre* (Pointless) til vennegruppen.
-Hele spillet kører på én enhed. Den gives videre mellem holdene, og **færrest point vinder**.
+Hele spillet kører på én enhed. Den gives videre mellem holdene, og **færrest point vinder** — eller 6 pointless-svar.
 
-**Version:** 2.0.1, med 44 spørgsmål. Se [CHANGELOG.md](CHANGELOG.md).
+**Version:** 3.0.0, med 44 spørgsmål, 30 anagrammer og 12 sammenhængsopgaver. Se [CHANGELOG.md](CHANGELOG.md).
 
 ## Sådan spiller I
 
 1. Åbn `index.html` ved at dobbeltklikke på filen. Der er ingen installation og intet build-trin.
-2. Opret 2–6 hold med 1–2 spillere hvert i holddesigneren.
+2. Opret 2–5 hold med 1–2 spillere hvert i holddesigneren. Hvert hold vælger sin egen farve.
 3. Tryk **Start spillet!**
-4. Til hvert spørgsmål giver hvert hold **2 svar**, ét ad gangen og på skift (A, B, A, B), og holdet må gerne konferere. Giv enheden videre efter hvert svar. Kan I ikke komme på et svar, så skriv **"pas"**; det giver 100 point.
-5. Pointene lægges sammen fra spørgsmål til spørgsmål, og pointtavlen nederst opdateres efter hvert svar.
-6. Når et spørgsmål er færdigt, og et hold har **1.000 point** eller mere, slutter spillet. Holdet med flest point taber, og holdet med færrest vinder.
+4. Kategorien følger en fast rundeplan: runde 1–5 *Jo Færre Jo Bedre*, 6–7 *Anagrammer*, 8–12 *Jo Færre Jo Bedre*, 13–14 *Sammenhæng* og derefter *Jo Færre Jo Bedre*.
+5. Har alle hold én spiller, svarer hvert hold én gang pr. runde, og rækkefølgen rykker én plads hver runde. Har et hold to spillere, giver hvert hold 2 svar på skift (A, B, A, B) og må gerne konferere. Giv enheden videre efter hvert svar.
+   - *Jo Færre Jo Bedre:* point = antal af 100 adspurgte. Forkert eller **"pas"** giver 100 point.
+   - *Anagrammer:* 10 sekunder. Korrekt = 0, ikke korrekt eller for sent = 25.
+   - *Sammenhæng:* 10 sekunder til at vælge de 4 af 12 ord, der hører sammen. Korrekt = 0, ikke korrekt eller for sent = 25.
+6. Pointene lægges sammen, og pointtavlen nederst opdateres efter hvert svar.
+7. Når en runde er færdig, og et hold har **1.000 point** eller mere, slutter spillet. Holdet med flest point taber, og holdet med færrest vinder. Et hold med **6 pointless-svar** (0 point i *Jo Færre Jo Bedre*) vinder straks.
+
+**Nyt spil** beholder holdene og husker, hvilke spørgsmål I har haft. Kommer et spørgsmål igen, vises jeres tidligere svar. Er spørgsmålet kendt, kan I trykke **Spørgsmål gentaget** før første svar. **Nulstil alle spil** sletter hold, point og historik.
 
 Spillet gemmes automatisk. Lukker I fanen, kan I trykke **Fortsæt spil** næste gang.
 
@@ -25,12 +31,15 @@ js/matcher.js         Normalisering + fuzzy matching af svar (ren logik)
 js/game-engine.js     Spilregler som ren reducer (ren logik)
 js/store.js           LocalStore: gemning, backup-slot, eksport/import
 js/countdown.js       Countdown-søjlen
+js/timer.js           Timer til anagrammer og sammenhæng
 js/screens.js         Render-funktioner pr. skærm
 js/app.js             Opstart og events
-data/questions.js     Spørgsmålsbanken
+data/questions.js     Spørgsmålsbanken (Jo Færre Jo Bedre)
+data/anagrams.js      Anagrammer
+data/connections.js   Sammenhængsopgaver
 tests.html            Tests i browseren
 countdown-test.html   Countdown-søjlen isoleret (85 / 39 / 0 / forkert)
-tests/                Testramme og specs (matcher, engine, store)
+tests/                Testramme og specs (matcher, engine, store, kategorier)
 scripts/              Testkørsel i Node, backup-script, git-hooks
 docs/reference/       Referencebilleder af layout
 ```
